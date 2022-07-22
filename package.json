@@ -1,0 +1,35 @@
+{
+  "name": "similarity-network",
+  "version": "0.0.1",
+  "author": "Seiji Matsuoka",
+  "homepage": "https://github.com/mojaie/similarity-network",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mojaie/similarity-network"
+  },
+  "description": "Web interface for similarity network visualization",
+  "license": "MIT",
+  "main": "main.js",
+  "devDependencies": {
+    "argv": "0.0.2",
+    "d3": "^5.5.0",
+    "ejs": "^2.6.1",
+    "http-server": "^0.12.3",
+    "jsdoc": "^3.6.5",
+    "jsdom": "^11.12.0",
+    "less": "^3.8.1",
+    "rollup": "^0.57.1",
+    "rollup-plugin-node-resolve": "^3.3.0",
+    "rollup-plugin-uglify": "^3.0.0",
+    "tape": "^4.9.1",
+    "uglify-es": "^3.3.9"
+  },
+  "scripts": {
+    "pretest": "npm run build",
+    "test": "tape 'test/**/*-test.js'",
+    "docs": "mkdir -p 'docs/app/docs' && jsdoc -r src -d 'docs/app/docs'",
+    "build": "node rollup.js --debug=true",
+    "deploy": "npm run docs && node rollup.js --debug=false"
+  },
+  "dependencies": {}
+}
