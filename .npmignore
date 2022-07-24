@@ -3,6 +3,3 @@
 .DS_Store
 
 node_modules
-assets/screenshots
-docs/_build
-docs/assets/resources

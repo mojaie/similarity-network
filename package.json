@@ -1,35 +1,28 @@
 {
   "name": "similarity-network",
-  "version": "0.0.1",
-  "author": "Seiji Matsuoka",
-  "homepage": "https://github.com/mojaie/similarity-network",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/mojaie/similarity-network"
-  },
   "description": "Web interface for similarity network visualization",
+  "homepage": "https://github.com/mojaie/similarity-network",
+  "author": "Seiji Matsuoka",
   "license": "MIT",
+  "version": "0.0.1",
+  "repository": "https://github.com/mojaie/similarity-network",
   "main": "main.js",
+  "type": "module",
+  "dependencies": {
+    "bootstrap": "^5.2.0",
+    "d3": "^7.6.1",
+    "lodash": "^4.17.21"
+  },
   "devDependencies": {
-    "argv": "0.0.2",
-    "d3": "^5.5.0",
-    "ejs": "^2.6.1",
-    "http-server": "^0.12.3",
-    "jsdoc": "^3.6.5",
-    "jsdom": "^11.12.0",
-    "less": "^3.8.1",
-    "rollup": "^0.57.1",
-    "rollup-plugin-node-resolve": "^3.3.0",
-    "rollup-plugin-uglify": "^3.0.0",
-    "tape": "^4.9.1",
-    "uglify-es": "^3.3.9"
+    "http-server": "^14.1.1",
+    "jsdoc": "^3.6.11",
+    "less": "^4.1.3",
+    "rollup": "^2.77.0",
+    "terser": "^5.14.2"
   },
   "scripts": {
-    "pretest": "npm run build",
-    "test": "tape 'test/**/*-test.js'",
-    "docs": "mkdir -p 'docs/app/docs' && jsdoc -r src -d 'docs/app/docs'",
-    "build": "node rollup.js --debug=true",
-    "deploy": "npm run docs && node rollup.js --debug=false"
-  },
-  "dependencies": {}
+    "less": "lessc raw/default.less site/build/default.css",
+    "build": "rollup --config",
+    "serve": "http-server"
+  }
 }

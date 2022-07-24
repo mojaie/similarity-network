@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<title>New network view</title>
+<meta charset="utf-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="stylesheet" type="text/css" href="build/default.css"/>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+<!-- if necessary <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js" integrity="sha384-IQsoLXl5PILFhosVNubq5LC7Qb9DXgDA9i+tQ8Zj3iwWAwPtgFTxbJ8NT4GN1R8p" crossorigin="anonymous"></script>-->
+<!-- if necessary <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>-->
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js" integrity="sha256-qXBd/EfAdjOA2FGrGAG+b3YBn2tn5A6bhz+LSgYD96k=" crossorigin="anonymous"></script>
+
+<!-- if necessary <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.5/pako.min.js"></script>-->
+
+<script src="build/app.js"></script>
+<div class="container-fluid" style="background-color: #fffff9">
+  <img id="loading-icon" src="../assets/loading2.gif"/>
+
+  <!--
+  <div id="debugbar">
+    <div>state.transform: <span id="debug-transform"></span></div>
+    <div>state.boundary: <span id="debug-boundary"></span></div>
+    <div>state.focusArea: <span id="debug-focusarea"></span></div>
+    <div>state.viewBox: <span id="debug-viewbox"></span></div>
+  </div>
+  -->
+
+  <div id="menubar"></div>
+  <div id="contents" class="row">
+    <div id="nw-control" class="col-sm-3 p-2"></div>
+    <div id="nw-frame" class="col-sm-9 px-0"></div>
+  </div>
+</div>
+<div id="dialogs"></div>
+<script type="text/javascript">
+  app.run();
+</script>
