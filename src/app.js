@@ -20,14 +20,14 @@ import {default as force} from './network/force.js';
 import {default as interaction} from './network/interaction.js';
 
 
-function app(view, nodes, edges) {
+async function app(session) {
   const menubar = d3.select('#menubar')
       .classed('my-1', true);
   menubar.selectAll('div,span,a').remove();  // Clean up
   const dialogs = d3.select('#dialogs');
   dialogs.selectAll('div').remove();  // Clean up
 
-  const state = new NetworkState(view, nodes, edges);
+  const state = new NetworkState(await session);
   // TODO: define field size according to the data size
   state.fieldWidth = 1200;
   state.fieldHeight = 1200;
@@ -39,9 +39,9 @@ function app(view, nodes, edges) {
   menu.append('a').call(renameDialog.menuLink);
   menu.append('a')
       .call(button.dropdownMenuItem, 'Save', 'menu-save')
-      .on('click', function () {
-        return state.save()
-          .then(() => menubar.select('.notify-saved').call(badge.notify));
+      .on('click', async function () {
+        await state.saveSnapshot(idb)
+        menubar.select('.notify-saved').call(badge.notify);
       });
 
   // Dashboard link
@@ -73,7 +73,23 @@ function app(view, nodes, edges) {
   dialogs.append('div')
       .classed('renamed', true)
       .call(renameDialog.body);
-  // TODO: select snapshot and view
+  dialogs.append('div')
+      .classed('selectd', true)
+      .call(selectDialog.body);
+  dialogs.append('div')
+      .classed('newd', true)
+      .call(newDialog.body); // (jsonかjson.tar.gz)
+  // TODO: export session (json.tar.gz)
+
+  // snapshotはcontrolでpull down選択?にする
+  // save snapshotもcontrolに表示
+  // 初期は最新のsnapshotを表示
+
+  // Jupyter notebook風に
+  // TODO: rename session
+  // TODO: rename snapshot
+
+  // TODO: 座標の初期化(0,0付近にランダム配置)
 
   // Contents
   const frame = d3.select('#nw-frame')
@@ -132,7 +148,7 @@ function updateApp(state) {
 }
 
 
-function run() {
+async function run() {
   const err = client.compatibility();
   if (err) {
     d3.select('body')
@@ -140,33 +156,23 @@ function run() {
       .text(err);
     return;
   }
-  // TODO: offline mode flags
-  const localFile = document.location.protocol !== "file:";  // TODO
-  const offLine = 'onLine' in navigator && !navigator.onLine;  // TODO
-  //client.registerServiceWorker();
-  const instance = client.URLQuery().instance || null;
-  const viewID = client.URLQuery().view || null;
-  if (instance == null && viewID == null) { return; }
-  return idb.getView(instance, viewID)
-    .then(view => {
-      if (!view) throw('ERROR: invalid URL');
-      view.instance = instance;
-      return Promise.all([
-        idb.getCollection(instance, view.nodes),
-        idb.getCollection(instance, view.edges)
-      ])
-      .then(colls => {
-        colls[0].instance = instance;
-        colls[1].instance = instance;
-        app(view, colls[0], colls[1]);
-      });
-    })
-    .catch(err => {
-      console.error(err);
-      d3.select('#nw-frame')
-        .style('color', 'red')
-        .text(err);
-    });
+
+  // TODO:
+  // idb config defaultWorkspaceを取りに行く
+  // あれば表示
+  const defaultSession = await idb.getConfig("defaultSession")
+  if (defaultSession == null) {
+    // なければimport dialog
+  }
+  try {
+    const session = idb.getItem(defaultse);
+    app(session)
+  } catch (err) {
+    console.error(err);
+    d3.select('#nw-frame')
+      .style('color', 'red')
+      .text(err);
+  }
 }
 
 

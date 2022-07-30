@@ -1,106 +1,66 @@
 
 /** @module network/state */
 
-import Collection from '../common/collection.js';
 import TransformState from  '../common/transform.js';
-import {default as idb} from '../common/idb.js';
 
 
 export default class NetworkState extends TransformState {
-  constructor(view, nodes, edges) {
-    super(1200, 1200, view.fieldTransform);
+  constructor(session) {
+    this.session = session;
+
+    // load snapshot
+    if (!session.hasOwnProperty('snapshot')) {
+      this.session.snapshot = [{
+        fieldTransform: {x: 0, y: 0, k: 1},
+        config: {
+          showNodeImageThreshold: 100,
+          alwaysShowNodeImage: false,
+          showEdgeThreshold: 500,
+          alwaysShowEdge: false,
+          legendOrientation: 'top-left'
+        },
+        appearance: {
+          nodecolor: {
+            field: null, rangePreset: 'green',
+            scale: 'linear', domain: [0, 1]
+          },
+          nodeSize: {
+            field: null, range: 'medium',
+            scale: 'linear', domain: [1, 1]
+          },
+          nodeLabel: {
+            field: null, size: 20, visible: false
+          },
+          edgeColor: {
+            field: null, rengePreset: 'gray',
+            scale: 'linear', domain: [0, 1]
+          },
+          edgeWidth: {
+            field: null, scale: 'linear', domain: [0.5, 1],
+            range: [10, 10], unknown: 1
+          },
+          edgeLabel: {
+            field: null, size: 12, visible: false
+          }
+        }
+      }]
+    }
+
+    super(1200, 1200, session.snapshot.slice(-1)[0].fieldTransform);
 
     /* Settings */
 
-    // Focused view mode (num of nodes displayed are less than the thld)
-    // Show node contents
-    // Disable smooth transition
-    this.focusedViewThreshold = 100;
-    this.enableFocusedView = true;
-    this.focusedView = false;
-    // Overlook view mode (num of nodes displayed are less than the thld)
-    // Hide edges
-    this.overlookViewThreshold = 500;
-    this.enableOverlookView = true;
-    this.overlookView = false;
+    this.currentSnapshot = session.snapshot.length - 1
+    this.showNodeImage = false;
+    this.showEdge = false;
 
-    // Legend orientation
-    this.legendOrient = 'top-left';
-
-    /* Attributes */
-
-    this.viewID = view.viewID || null;
-    this.instance = view.instance || null;
-    this.name = view.name;
-
-    this.nodes = new Collection(nodes);
-    this.edges = new Collection(edges);
-
-    /* Appearance */
-    const defaultNodeField = 'index';
-    const defaultEdgeField = 'weight';
-
-    this.nodeColor = {
-      field: defaultNodeField, color: 'nodeDefault',
-      scale: 'linear', domain: [0, 1],
-      range: ['#7fffd4', '#7fffd4'], unknown: '#7fffd4',
-      legend: true
-    };
-    Object.assign(this.nodeColor, view.nodeColor || {});
-
-    this.nodeSize = {
-      field: defaultNodeField, scale: 'linear', domain: [1, 1],
-      range: [40, 40], unknown: 40, legend: false
-    };
-    Object.assign(this.nodeSize, view.nodeSize || {});
-
-    this.nodeLabel = {
-      field: defaultNodeField, size: 20, visible: false
-    };
-    Object.assign(this.nodeLabel, view.nodeLabel || {});
-
-    this.nodeLabelColor = {
-      field: defaultNodeField, color: 'monoblack',
-      scale: 'linear', domain: [1, 1],
-      range: ['#333333', '#333333'], unknown: '#cccccc',
-      legend: false
-    };
-    Object.assign(this.nodeLabelColor, view.nodeLabelColor || {});
-
-    this.edgeColor = {
-      field: defaultEdgeField, color: 'monogray',
-      scale: 'linear', domain: [0, 1],
-      range: ['#999999', '#999999'], unknown: '#cccccc'
-    };
-    Object.assign(this.edgeColor, view.edgeColor || {});
-
-    this.edgeWidth = {
-      field: defaultEdgeField, scale: 'linear', domain: [0.5, 1],
-      range: [10, 10], unknown: 1
-    };
-    Object.assign(this.edgeWidth, view.edgeWidth || {});
-
-    this.edgeLabel = {
-      field: defaultEdgeField, size: 12, visible: false
-    };
-    Object.assign(this.edgeLabel, view.edgeLabel || {});
-
-    this.edgeLabelColor = {
-      field: defaultEdgeField, color: 'monoblack',
-      scale: 'linear', domain: [1, 1],
-      range: ['#333333', '#333333'], unknown: '#cccccc'
-    };
-    Object.assign(this.edgeLabelColor, view.edgeLabelColor || {});
-
-    // Connection threshold
-    this.connThldField = view.connThldField || defaultEdgeField;
-    this.minConnThld = view.minConnThld;
-    this.currentConnThld = view.currentConnThld || view.minConnThld;
+    // Filter
+    this.filter = session.filter || [];
 
     // Force
-    this.coords = view.coords;
+    this.coords = session.snapshot.coords;
     this.forceActive = !this.coords;
-    this.forceType = view.forceType || 'aggregate';
+    this.forceParam = session.config.forceParam || 'aggregate';
 
     // Event listeners
     this.zoomListener = null;
@@ -213,42 +173,14 @@ export default class NetworkState extends TransformState {
     );
   }
 
-  save() {
+  saveSnapshot(idb) {
     this.coords = this.ns.map(n => ({x: n.x, y: n.y}));
     return idb.updateItem(this.instance, item => {
-      const ni = item.dataset
-        .findIndex(e => e.collectionID === this.nodes.collectionID);
-      item.dataset[ni] = this.nodes.export();
-      const ei = item.dataset
-        .findIndex(e => e.collectionID === this.edges.collectionID);
-      item.dataset[ei] = this.edges.export();
-      const vi = item.views
-        .findIndex(e => e.viewID === this.viewID);
-      item.views[vi] = this.export();
+      item.snapshot[this.currentSnapshot] = this.session.snapshot
     });
   }
 
   export() {
-    return {
-      $schema: "https://mojaie.github.io/kiwiii/specs/network_v1.0.json",
-      viewID: this.viewID,
-      name: this.name,
-      viewType: "network",
-      nodes: this.nodes.collectionID,
-      edges: this.edges.collectionID,
-      nodeColor: this.nodeColor,
-      nodeSize: this.nodeSize,
-      nodeLabel: this.nodeLabel,
-      nodeLabelColor: this.nodeLabelColor,
-      edgeColor: this.edgeColor,
-      edgeWidth: this.edgeWidth,
-      edgeLabel: this.edgeLabel,
-      edgeLabelColor: this.edgeLabelColor,
-      connThldField: this.connThldField,
-      currentConnThld: this.currentConnThld,
-      minConnThld: this.minConnThld,
-      fieldTransform: this.transform,
-      coords: this.coords
-    };
+    return this.session
   }
 }

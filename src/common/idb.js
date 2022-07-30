@@ -4,12 +4,11 @@
 import _ from 'lodash';
 
 import {default as misc} from './misc.js';
-import {default as legacy} from './legacySchema.js';
 
 
 // Increment versions if IDB schema has updated.
-const pkgStoreVersion = 2;
-const assetStoreVersion = 1;
+const sessionStoreVersion = 1;
+const configStoreVersion = 1;
 
 
 function connect(name, version, createObj) {
@@ -27,11 +26,11 @@ function connect(name, version, createObj) {
 
 
 const instance = {
-  pkgs: connect("Packages", pkgStoreVersion, db => {
-    db.createObjectStore("Packages", {keyPath: 'id'});
+  session: connect("Session", sessionStoreVersion, db => {
+    db.createObjectStore("Session", {keyPath: 'id'});
   }),
-  assets: connect("Assets", assetStoreVersion, db => {
-    db.createObjectStore("Assets", {keyPath: 'key'});
+  config: connect("Config", configStoreVersion, db => {
+    db.createObjectStore("Config", {keyPath: 'key'});
   })
 };
 
@@ -56,30 +55,29 @@ function clear(dbid) {
  * Delete all data in the local storage
  */
 function clearAll() {
-  return Promise.all([clear('pkgs'), clear('assets')]);
+  return Promise.all([clear('session'), clear('config')]);
 }
 
 
 /**
- * Returns all packages
- * @return {Promise} Promise of list of packages
+ * Returns all sessions
+ * @return {Promise} Promise of list of sessions
  */
-function getAllItems() {
+async function getAllItems() {
+  const db = await instance.session
   return new Promise(resolve => {
     const res = [];
-    return instance.pkgs.then(db => {
-      db.transaction(db.name)
-        .objectStore(db.name).openCursor()
-        .onsuccess = event => {
-          const cursor = event.target.result;
-          if (cursor) {
-            res.push(cursor.value);
-            cursor.continue();
-          } else {
-            resolve(res);
-          }
-        };
-    });
+    db.transaction(db.name)
+      .objectStore(db.name).openCursor()
+      .onsuccess = event => {
+        const cursor = event.target.result;
+        if (cursor) {
+          res.push(cursor.value);
+          cursor.continue();
+        } else {
+          resolve(res);
+        }
+      };
   });
 }
 
@@ -89,14 +87,13 @@ function getAllItems() {
  * @param {string} id - Package instance ID
  * @return {array} data store object
  */
-function getItem(id) {
+async function getItem(id) {
+  const db = instance.session
   return new Promise((resolve, reject) => {
-    return instance.pkgs.then(db => {
-      const req = db.transaction(db.name)
-        .objectStore(db.name).get(id);
-      req.onsuccess = event => resolve(event.target.result);
-      req.onerror = event => reject(event);
-    });
+    const req = db.transaction(db.name)
+      .objectStore(db.name).get(id);
+    req.onsuccess = event => resolve(event.target.result);
+    req.onerror = event => reject(event);
   });
 }
 
@@ -107,7 +104,7 @@ function getItem(id) {
  */
 function putItem(value) {
   return new Promise((resolve, reject) => {
-    return instance.pkgs.then(db => {
+    return instance.session.then(db => {
       const obj = db.transaction(db.name, 'readwrite')
         .objectStore(db.name);
       const req = obj.put(value);
@@ -125,7 +122,7 @@ function putItem(value) {
  */
 function updateItem(id, updater) {
   return new Promise((resolve, reject) => {
-    return instance.pkgs.then(db => {
+    return instance.session.then(db => {
       const obj = db.transaction(db.name, 'readwrite')
         .objectStore(db.name);
       const req = obj.get(id);
@@ -148,7 +145,7 @@ function updateItem(id, updater) {
  */
 function deleteItem(id) {
   return new Promise((resolve, reject) => {
-    return instance.pkgs.then(db => {
+    return instance.session.then(db => {
       const req = db.transaction(db.name, 'readwrite')
         .objectStore(db.name).delete(id);
       req.onerror = event => reject(event);
@@ -164,9 +161,9 @@ function deleteItem(id) {
  * @param {string} viewID - view ID
  * @return {array} view objects
  */
-function getView(id, viewID) {
-  return getItem(id)
-    .then(pkg => pkg.views.find(e => e.viewID === viewID));
+async function getSnapshot(id, viewID) {
+  const session = await getItem(id);
+  return session.snapshot.find(e => e.viewID === viewID);
 }
 
 
@@ -300,44 +297,12 @@ function importItem(data) {
 
 
 
-
-
-/**
- * Store new network view
- * @param {string} instance - Package instance ID
- * @param {string} nodesID - ID of nodes collection
- * @param {string} nodesName - Name of nodes collection
- * @param {object} response - Response object
- */
-function newNetwork(instance, nodesID, nodesName, response) {
-  const viewID = misc.uuidv4().slice(0, 8);
-  const edgesID = response.workflowID.slice(0, 8);
-  return updateItem(instance, item => {
-    item.views.push({
-      $schema: "https://mojaie.github.io/kiwiii/specs/network_v1.0.json",
-      viewID: viewID,
-      name: `${nodesName}_${response.name}`,
-      viewType: 'network',
-      nodes: nodesID,
-      edges: edgesID,
-      minConnThld: response.query.params.threshold
-    });
-    item.dataset.push({
-      $schema: "https://mojaie.github.io/kiwiii/specs/collection_v1.0.json",
-      collectionID: edgesID,
-      name: response.name,
-      contents: [response]
-    });
-  }).then(() => viewID);
-}
-
-
 /**
  * Get asset by a key
  * @param {string} key - key
  * @return {array} asset object (if not found, resolve with undefined)
  */
-function getAsset(key) {
+function getConfig(key) {
   return new Promise((resolve, reject) => {
     return instance.assets.then(db => {
       const req = db.transaction(db.name)
@@ -357,7 +322,7 @@ function getAsset(key) {
  * @param {string} key - key
  * @param {string} content - asset to store
  */
-function putAsset(key, content) {
+function putConfig(key, content) {
   return new Promise((resolve, reject) => {
     return instance.assets.then(db => {
       const obj = db.transaction(db.name, 'readwrite')
