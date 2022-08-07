@@ -3,7 +3,7 @@
 
 import d3 from 'd3';
 
-const iconBaseURL = '../assets/icon/';
+const iconBaseURL = './asset/icon/';
 
 
 function buttonBox(selection, label, type) {

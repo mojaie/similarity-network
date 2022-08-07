@@ -10,10 +10,10 @@
 
 <script src="https://d3js.org/d3.v7.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js" integrity="sha256-qXBd/EfAdjOA2FGrGAG+b3YBn2tn5A6bhz+LSgYD96k=" crossorigin="anonymous"></script>
-
-<!-- if necessary <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.5/pako.min.js"></script>-->
+<script src="https://cdn.jsdelivr.net/npm/pako@2.0.4/dist/pako.min.js" integrity="sha256-g6DO+Wvvj9Cxrj0mC9LPqZLYIYINQ19U/PJ00JcmN50=" crossorigin="anonymous"></script>
 
 <script src="build/app.js"></script>
+
 <div class="container-fluid" style="background-color: #fffff9">
   <img id="loading-icon" src="../assets/loading2.gif"/>
 
@@ -26,10 +26,11 @@
   </div>
   -->
 
-  <div id="menubar"></div>
-  <div id="contents" class="row">
-    <div id="nw-control" class="col-sm-3 p-2"></div>
-    <div id="nw-frame" class="col-sm-9 px-0"></div>
+  <div id="header1"></div>
+  <div id="header2"></div>
+  <div id="workspace" class="row">
+    <div id="control" class="col-sm-3 p-2"></div>
+    <div id="frame" class="col-sm-9 px-0"></div>
   </div>
 </div>
 <div id="dialogs"></div>

@@ -6,12 +6,22 @@ import TransformState from  '../common/transform.js';
 
 export default class NetworkState extends TransformState {
   constructor(session) {
+    let ft = null
+    if (!session.snapshots) {
+      ft = {x: 0, y: 0, k: 1};
+    } else {
+      ft = session.snapshots.slice(-1)[0].fieldTransform
+    }
+    super(1200, 1200, ft);
     this.session = session;
 
-    // load snapshot
-    if (!session.hasOwnProperty('snapshot')) {
-      this.session.snapshot = [{
-        fieldTransform: {x: 0, y: 0, k: 1},
+    // default snapshot
+    if (!this.session.hasOwnProperty("snapshots")) {
+      this.session.snapshots = [];
+    }
+    if (this.session.snapshots.length() == 0) {
+      this.session.snapshots.push({
+        fieldTransform: ft,
         config: {
           showNodeImageThreshold: 100,
           alwaysShowNodeImage: false,
@@ -43,10 +53,8 @@ export default class NetworkState extends TransformState {
             field: null, size: 12, visible: false
           }
         }
-      }]
+      })
     }
-
-    super(1200, 1200, session.snapshot.slice(-1)[0].fieldTransform);
 
     /* Settings */
 
