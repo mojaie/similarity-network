@@ -135,17 +135,16 @@ async function run() {
   // stub
   const stub = {
     name: "test",
-    nodes: [],
-    edges: [],
-    snapshots: {
-      name: "default",
-      filters: [],
-      appearance: {},
-      positions: []
-    }
+    nodes: [
+      {name: "hoge"}, {name: "fuga"}, {name: "piyo"},
+    ],
+    edges: [
+      {source: 0, target: 1}, {source: 1, target: 2}, {source: 2, target: 0}
+    ],
+    snapshots: []
   };
-  // const sid = await idb.putSession(stub);
-  // await idb.putConfig("currentSession", sid);
+  //const sid = await idb.putSession(stub);
+  //await idb.putConfig("currentSession", sid);
 
   const sessionid = await idb.getConfig("currentSession");
   if (!sessionid) { return; }
@@ -170,18 +169,18 @@ async function run() {
   // TODO: 座標の初期化(0,0付近にランダム配置)
 
   // Contents
-  const frame = d3.select('#nw-frame')
+  const frame = d3.select('#frame')
       .call(transform.viewFrame, state);
   frame.select('.view')
       .call(component.networkView, state)
       .call(force.activate, state)
       .call(interaction.setInteraction, state);
-  d3.select('#nw-control')
+  d3.select('#control')
       .call(control.controlBox, state);
 
   // Resize window
   window.onresize = () =>
-    d3.select('#nw-frame').call(transform.resize, state);
+    d3.select('#frame').call(transform.resize, state);
 
   // Update
   state.updateAllNotifier();

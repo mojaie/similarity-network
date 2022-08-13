@@ -6,69 +6,72 @@ import TransformState from  '../common/transform.js';
 
 export default class NetworkState extends TransformState {
   constructor(session) {
-    let ft = null
-    if (!session.snapshots) {
-      ft = {x: 0, y: 0, k: 1};
-    } else {
-      ft = session.snapshots.slice(-1)[0].fieldTransform
-    }
-    super(1200, 1200, ft);
+    super(1200, 1200, null);
     this.session = session;
-
     // default snapshot
     if (!this.session.hasOwnProperty("snapshots")) {
       this.session.snapshots = [];
     }
-    if (this.session.snapshots.length() == 0) {
-      this.session.snapshots.push({
-        fieldTransform: ft,
-        config: {
-          showNodeImageThreshold: 100,
-          alwaysShowNodeImage: false,
-          showEdgeThreshold: 500,
-          alwaysShowEdge: false,
-          legendOrientation: 'top-left'
+    if (this.session.snapshots.length == 0) {
+      this.session.snapshots.push({});
+    }
+    this.currentSnapshot = this.session.snapshots.slice(-1)[0]
+    
+    if (!this.currentSnapshot.hasOwnProperty("name")) {
+      this.currentSnapshot.name = "default";
+    }
+    if (!this.currentSnapshot.hasOwnProperty("filters")) {
+      this.currentSnapshot.filters = [];
+    }
+    if (!this.currentSnapshot.hasOwnProperty("positions")) {
+      this.currentSnapshot.positions = [];
+    }
+    if (!this.currentSnapshot.hasOwnProperty("config")) {
+      this.currentSnapshot.config = {
+        showNodeImageThreshold: 100,
+        alwaysShowNodeImage: false,
+        showEdgeThreshold: 500,
+        alwaysShowEdge: false,
+        legendOrientation: 'top-left',
+        forceParam: 'aggregate'
+      };
+    }
+    if (!this.currentSnapshot.hasOwnProperty("appearance")) {
+      this.currentSnapshot.appearance = {
+        nodecolor: {
+          field: null, rangePreset: 'green',
+          scale: 'linear', domain: [0, 1]
         },
-        appearance: {
-          nodecolor: {
-            field: null, rangePreset: 'green',
-            scale: 'linear', domain: [0, 1]
-          },
-          nodeSize: {
-            field: null, range: 'medium',
-            scale: 'linear', domain: [1, 1]
-          },
-          nodeLabel: {
-            field: null, size: 20, visible: false
-          },
-          edgeColor: {
-            field: null, rengePreset: 'gray',
-            scale: 'linear', domain: [0, 1]
-          },
-          edgeWidth: {
-            field: null, scale: 'linear', domain: [0.5, 1],
-            range: [10, 10], unknown: 1
-          },
-          edgeLabel: {
-            field: null, size: 12, visible: false
-          }
+        nodeSize: {
+          field: null, range: 'medium',
+          scale: 'linear', domain: [1, 1]
+        },
+        nodeLabel: {
+          field: null, size: 20, visible: false
+        },
+        edgeColor: {
+          field: null, rengePreset: 'gray',
+          scale: 'linear', domain: [0, 1]
+        },
+        edgeWidth: {
+          field: null, scale: 'linear', domain: [0.5, 1],
+          range: [10, 10], unknown: 1
+        },
+        edgeLabel: {
+          field: null, size: 12, visible: false
         }
-      })
+      };
     }
 
     /* Settings */
 
-    this.currentSnapshot = session.snapshot.length - 1
     this.showNodeImage = false;
     this.showEdge = false;
 
-    // Filter
-    this.filter = session.filter || [];
-
     // Force
-    this.coords = session.snapshot.coords;
+    this.coords = this.currentSnapshot.positions;
     this.forceActive = !this.coords;
-    this.forceParam = session.config.forceParam || 'aggregate';
+    this.forceParam = this.currentSnapshot.config.forceParam;
 
     // Event listeners
     this.zoomListener = null;
@@ -101,15 +104,15 @@ export default class NetworkState extends TransformState {
     if (this.ns) {
       this.coords = this.ns.map(e => ({x: e.x, y: e.y}));
     }
-    this.ns = JSON.parse(JSON.stringify(this.nodes.records()));
+    this.ns = JSON.parse(JSON.stringify(this.session.nodes));
     this.ns.forEach(n => { n.adjacency = []; });
-    this.es = JSON.parse(JSON.stringify(this.edges.records()));
+    this.es = JSON.parse(JSON.stringify(this.session.edges));
     this.es.forEach((e, i) => {
       e.num = i;  // e.index will be overwritten by d3-force
       this.ns[e.source].adjacency.push([e.target, i]);
       this.ns[e.target].adjacency.push([e.source, i]);
     });
-    if (this.coords) {
+    if (this.coords.length != 0) {
       this.setAllCoords(this.coords);
     }
   }
