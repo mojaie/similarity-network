@@ -12,7 +12,7 @@ const forceType = [
     key: 'aggregate',
     name: 'Aggregate',
     force: d3.forceSimulation()
-      .force('link', d3.forceLink().id(d => d.index).distance(60).strength(1))
+      .force('link', d3.forceLink().id(d => d.__index).distance(60).strength(1))
       .force('charge',
         d3.forceManyBody().strength(-600).distanceMin(15).distanceMax(720))
       .force('collide', d3.forceCollide().radius(90))
@@ -23,7 +23,7 @@ const forceType = [
     key: 'tree',
     name: 'Tree',
     force: d3.forceSimulation()
-      .force('link', d3.forceLink().id(d => d.index).distance(60).strength(2))
+      .force('link', d3.forceLink().id(d => d.__index).distance(60).strength(2))
       .force('charge',
         d3.forceManyBody().strength(-6000).distanceMin(15).distanceMax(720))
       .force('collide', d3.forceCollide().radius(90))
@@ -34,7 +34,7 @@ const forceType = [
     key: 'sparse',
     name: 'Sparse',
     force: d3.forceSimulation()
-      .force('link', d3.forceLink().id(d => d.index).distance(60).strength(2))
+      .force('link', d3.forceLink().id(d => d.__index).distance(60).strength(2))
       .force('charge',
         d3.forceManyBody().strength(-6000).distanceMin(15).distanceMax(3600))
       .force('collide', d3.forceCollide().radius(90))
@@ -53,17 +53,17 @@ function forceSimulation(type, width, height) {
 
 function forceDragListener(selection, simulation, state) {
   return d3.drag()
-    .on('start', () => {
-      if (!d3.event.active) state.relaxNotifier();
+    .on('start', event => {
+      if (!event.active) state.relaxNotifier();
     })
-    .on('drag', d => {
-      d.fx = d3.event.x;
-      d.fy = d3.event.y;
+    .on('drag', event => {
+      event.subject.fx = event.x;
+      event.subject.fy = event.y;
     })
-    .on('end', d => {
-      if (!d3.event.active) simulation.alphaTarget(0);
-      d.fx = null;
-      d.fy = null;
+    .on('end', event => {
+      if (!event.active) simulation.alphaTarget(0);
+      event.subject.fx = null;
+      event.subject.fy = null;
     });
 }
 
@@ -77,6 +77,7 @@ function stick(selection, simulation, state) {
     });
   state.dragListener = interaction.dragListener(selection, state);
   state.forceActive = false;
+  console.log("stick")
 }
 
 
@@ -94,13 +95,13 @@ function unstick(selection, simulation, state) {
 function activate(selection, state) {
   state.setForceNotifier = () => {
     const simulation = forceSimulation(
-        state.forceType, state.fieldWidth, state.fieldHeight);
-    simulation.nodes(state.ns)
-      .force('link').links(state.currentEdges());
+        state.config.forceParam, state.fieldWidth, state.fieldHeight);
+    simulation.nodes(state.fnodes)
+      .force('link').links(state.fedges);
     simulation
       .on('tick', () => {
-        const coords = state.ns.map(e => ({x: e.x, y: e.y}));
-        state.setAllCoords(coords);
+        // const coords = state.fnodes.map(e => ({x: e.x, y: e.y}));
+        // state.setAllCoords(coords);
         selection.selectAll(".node")
           .call(component.updateNodeCoords);
         selection.selectAll(".link")
@@ -108,14 +109,11 @@ function activate(selection, state) {
         state.tickCallback(simulation);
       })
       .on('end', () => {
+        state.setBoundary();
         state.updateComponentNotifier();
+        selection.call(stick, simulation, state);
         state.tickCallback(simulation);
       });
-    if (state.forceActive) {
-      state.coords ? state.relaxNotifier() : state.restartNotifier();
-    } else {
-      state.stickNotifier();
-    }
 
     state.stickNotifier = () => {
       selection.call(stick, simulation, state);
@@ -128,6 +126,13 @@ function activate(selection, state) {
       selection.call(unstick, simulation, state);
       simulation.alpha(1).restart();
     };
+
+
+    if (state.forceActive) {
+      state.restartNotifier();
+    } else {
+      state.stickNotifier();
+    }
   };
 }
 

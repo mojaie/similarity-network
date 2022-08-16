@@ -1,4 +1,4 @@
-var app = (function (d3, _) {
+var app = (function (d3, _, pako) {
   'use strict';
 
   function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
@@ -24,6 +24,7 @@ var app = (function (d3, _) {
   var d3__default = /*#__PURE__*/_interopDefaultLegacy(d3);
   var d3__namespace = /*#__PURE__*/_interopNamespace(d3);
   var ___default = /*#__PURE__*/_interopDefaultLegacy(_);
+  var pako__default = /*#__PURE__*/_interopDefaultLegacy(pako);
 
   function URLQuery() {
     const pairs = window.location.search.substring(1).split("&")
@@ -123,450 +124,9 @@ var app = (function (d3, _) {
     sortType, formatNum, partialMatch, uuidv4
   };
 
-  const statusConv = {
-    Queued: 'ready',
-    'In progress': 'running',
-    Aborting: 'running',
-    Aborted: 'aborted',
-    Completed: 'done',
-    Failure: 'failure'
-  };
-
-  const dataTypeConv = {
-    datatable: 'nodes',
-    connection: 'edges'
-  };
-
-  function v07_to_v08_nodes(json) {
-    const fields = json.columns.map(e => {
-      if (e.sort === 'numeric') {
-        e.format = 'numeric';
-      } else if (e.sort === 'text') {
-        e.format = 'text';
-      } else if (e.sort === 'none') {
-        e.format = 'raw';
-      }
-      return e;
-    });
-    return {
-      id: json.id,
-      name: json.name,
-      dataType: dataTypeConv[json.format],
-      schemaVersion: 0.8,
-      revision: 0,
-      status: statusConv[json.status],
-      fields: fields,
-      records: json.records,
-      query: json.query,
-      taskCount: json.searchCount,
-      doneCount: json.searchDoneCount | json.searchCount,
-      resultCount: json.recordCount,
-      progress: json.progress | 100,
-      execTime: json.execTime,
-      created: json.startDate | json.responseDate,
-    };
-  }
-
-  function v07_to_v08_edges(json, nodeFields) {
-    const snp = {
-      fieldTransform: json.snapshot.fieldTransform,
-      nodePositions: json.snapshot.nodePositions,
-      nodeColor: {},
-      nodeSize: {},
-      nodeLabel: {},
-      edge: {}
-    };
-    if (json.snapshot.hasOwnProperty('nodeColor')) {
-      snp.nodeColor.id = json.snapshot.nodeColor.id;
-      snp.nodeColor.scale = json.snapshot.nodeColor.scale;
-      snp.nodeColor.field = nodeFields.find(e => e.key === json.snapshot.nodeColor.column);
-    } else {
-      snp.nodeColor = {
-        id: 'color', field: nodeFields[0],
-        scale: {scale: 'linear', domain: [0, 1], range: ['black', 'white'], unknown: 'gray'}
-      };
-    }
-    if (json.snapshot.hasOwnProperty('nodeSize')) {
-      snp.nodeSize.id = json.snapshot.nodeSize.id;
-      snp.nodeSize.scale = json.snapshot.nodeSize.scale;
-      snp.nodeSize.field = nodeFields.find(e => e.key === json.snapshot.nodeSize.column);
-    } else {
-      snp.nodeSize = {
-        id: 'size', field: nodeFields[0],
-        scale: {scale: 'linear', domain: [0, 1], range: [20, 20], unknown: 20}
-      };
-    }
-    if (json.snapshot.hasOwnProperty('nodeLabel')) {
-      snp.nodeLabel.id = json.snapshot.nodeLabel.id;
-      snp.nodeLabel.size = json.snapshot.nodeLabel.size;
-      snp.nodeLabel.text = json.snapshot.nodeLabel.text;
-      snp.nodeLabel.visible = json.snapshot.nodeLabel.visible;
-      snp.nodeLabel.scale = json.snapshot.nodeLabel.scale;
-      snp.nodeLabel.field = nodeFields.find(e => e.key === json.snapshot.nodeLabel.column);
-    } else {
-      snp.nodeLabel = {
-        id: 'label', size: 12, text: 'index', visible: false, field: nodeFields[0],
-        scale: {scale: 'linear', domain: [0, 1], range: ['black', 'white'], unknown: 'gray'}
-      };
-    }
-    if (json.snapshot.hasOwnProperty('nodeContent')) {
-      snp.nodeContent = json.snapshot.nodeContent;
-    } else {
-      snp.nodeContent = {structure: {visible: false}};
-    }
-    if (json.snapshot.hasOwnProperty('edge')) {
-      snp.edge = json.snapshot.edge;
-    } else {
-      snp.edge = {
-        id: 'label', label: {size: 10, visible: false}, visible: true,
-        scale: {scale: 'linear', domain: [0, 1], range: [5, 5], unknown: 5}
-      };
-    }
-    return {
-      id: json.id,
-      name: json.name,
-      dataType: dataTypeConv[json.format],
-      schemaVersion: 0.8,
-      revision: 0,
-      reference: {
-        nodes: json.nodeTableId
-      },
-      status: statusConv[json.status],
-      fields: [
-        {'key': 'source'},
-        {'key': 'target'},
-        {'key': 'weight'}
-      ],
-      records: json.records,
-      query: json.query,
-      networkThreshold: json.networkThreshold,
-      taskCount: json.searchCount,
-      doneCount: json.searchDoneCount | json.searchCount,
-      resultCount: json.recordCount,
-      progress: json.progress | 100,
-      execTime: json.execTime,
-      created: json.startDate | json.responseDate,
-      snapshot: snp
-    };
-  }
-
-
-  function v08_nodes(json) {
-    json.records.forEach((e, i) => {
-      e.index = i;
-      e.structure = e._structure;
-      delete e._index;
-      delete e._structure;
-    });
-    json.fields.forEach(e => {
-      if (e.key === '_index') e.key = 'index';
-      if (e.key === '_structure') e.key = 'structure';
-      if (e.sort === 'numeric') e.format = 'numeric';
-      if (e.sort === 'text') e.format = 'text';
-      if (e.sort === 'none') e.format = 'raw';
-    });
-    return json;
-  }
-
-  function v08_graph(json) {
-    if (!json.edges.hasOwnProperty('reference')) { // ver0.8.0-0.8.1
-      json.edges.reference = {nodes: json.edges.nodesID};
-    }
-    if (json.nodes.fields.find(e => e.key === '_index')) {
-      const idx_converter = {};
-      json.nodes.records.forEach((e, i) => {
-          e.index = i;
-          e.structure = e._structure;
-          idx_converter[e._index] = e.index;
-          delete e._index;
-          delete e._structure;
-      });
-      json.edges.records.forEach(e => {
-          e.source = idx_converter[e.source];
-          e.target = idx_converter[e.target];
-      });
-      json.nodes.fields.forEach(e => {
-        if (e.key === '_index') e.key = 'index';
-        if (e.key === '_structure') e.key = 'structure';
-        if (e.sort === 'numeric') e.format = 'numeric';
-        if (e.sort === 'text') e.format = 'text';
-        if (e.sort === 'none') e.format = 'raw';
-      });
-    }
-    return json;
-  }
-
-  function v10_nodes(json) {
-    return {
-      id: json.id,
-      name: json.name,
-      dataType: json.dataType,
-      schemaVersion: '0.10',
-      revision: json.revision,
-      status: json.status,
-      fields: json.fields,
-      records: json.records,
-      query: json.query,
-      progress: json.progress,
-      execTime: json.execTime,
-      created: json.created,
-      reference: {}
-    };
-  }
-
-
-  function v10_edges(json) {
-    const snapshot = {
-      networkThreshold: json.networkThreshold
-    };
-    snapshot.nodeContentVisible = json.snapshot.nodeContent.structure.visible;
-    snapshot.nodeColor = json.snapshot.nodeColor.scale || {};
-    if (snapshot.nodeColor.field) {
-      snapshot.nodeColor.field = json.snapshot.nodeColor.field.key;
-      if (snapshot.nodeColor.field === '_index') {
-        snapshot.nodeColor.field = 'index';
-      }
-    }
-    if (snapshot.nodeColor.scale === 'ordinal') {
-      snapshot.nodeColor.range = d3__default["default"].schemeCategory20;
-    }
-    snapshot.nodeSize = json.snapshot.nodeSize.scale || {};
-    if (json.snapshot.nodeSize.field) {
-      snapshot.nodeSize.field = json.snapshot.nodeSize.field.key;
-      if (snapshot.nodeSize.field === '_index') {
-        snapshot.nodeSize.field = 'index';
-      }
-    }
-    snapshot.nodeLabel = {};
-    if (json.snapshot.nodeLabel.text) {
-      snapshot.nodeLabel.text = json.snapshot.nodeLabel.text.key;
-      if (snapshot.nodeLabel.text === '_index') {
-        snapshot.nodeLabel.text = 'index';
-      }
-    }
-    snapshot.nodeLabel.size = json.snapshot.nodeLabel.size;
-    snapshot.nodeLabel.visible = json.snapshot.nodeLabel.visible;
-    snapshot.nodeLabelColor = json.snapshot.nodeLabel.scale || {};
-    if (json.snapshot.nodeLabel.field) {
-      snapshot.nodeLabelColor.field = json.snapshot.nodeLabel.field.key;
-      if (snapshot.nodeLabelColor.field === '_index') {
-        snapshot.nodeLabelColor.field = 'index';
-      }
-    }
-    if (snapshot.nodeLabelColor.scale === 'ordinal') {
-      snapshot.nodeLabelColor.range = d3__default["default"].schemeCategory20;
-    }
-    snapshot.edgeVisible = json.snapshot.edge.visible;
-    snapshot.edgeWidth = json.snapshot.edge.scale || {};
-    snapshot.edgeLabel = {};
-    snapshot.edgeLabel.size = json.snapshot.edge.label.size;
-    snapshot.edgeLabel.visible = json.snapshot.edge.label.visible;
-    snapshot.networkThreshold = json.networkThreshold || json.query.threshold;
-    snapshot.coords = json.snapshot.nodePositions;
-    // TODO: when created date is lost
-    return {
-      id: json.id,
-      name: json.name,
-      dataType: json.dataType,
-      schemaVersion: '0.10',
-      revision: json.revision,
-      status: json.status,
-      fields: json.fields,
-      records: json.records,
-      query: {params: json.query},
-      progress: json.progress,
-      execTime: json.execTime,
-      created: json.created,
-      snapshot: snapshot,
-      reference: json.reference
-    };
-  }
-
-  function convertTable(json) {
-    let data = json;
-    if (!(data.hasOwnProperty('schemaVersion') || data.hasOwnProperty('$schema'))) { // v0.7
-      data = v07_to_v08_nodes(data);
-    }
-    if (data.schemaVersion == '0.8') {
-      data = v08_nodes(data);
-      data = v10_nodes(data);
-    }
-    if (!data.hasOwnProperty('$schema')) {
-      delete data.schemaVersion;
-      delete data.revision;
-      data.$schema = "https://mojaie.github.io/flashflood/_static/specs/job_result_v1.0.json";
-    }
-    data.fields.forEach(e => {
-      if (e.key === 'structure') {
-        e.format = 'svg';
-      }
-      delete e.width;
-      delete e.height;
-    });
-    return data;
-  }
-
-  function convertNetwork(json) {
-    let data = json;
-    if (!(data.edges.hasOwnProperty('schemaVersion') || data.edges.hasOwnProperty('$schema'))) { // v0.7
-      data.nodes = v07_to_v08_nodes(data.nodes);
-      data.edges = v07_to_v08_edges(data.edges, data.nodes.fields);
-    }
-    if (data.edges.schemaVersion == '0.8' || data.edges.schemaVersion === 0.1) {  // wrong conversion of '0.10'
-      data = v08_graph(data);
-      data.nodes = v10_nodes(data.nodes);
-      data.edges = v10_edges(data.edges);
-    }
-    if (!data.edges.hasOwnProperty('$schema')) {
-      delete data.nodes.schemaVersion;
-      delete data.edges.schemaVersion;
-      delete data.nodes.revision;
-      delete data.edges.revision;
-      data.nodes.$schema = "https://mojaie.github.io/flashflood/_static/specs/job_result_v1.0.json";
-      data.edges.$schema = "https://mojaie.github.io/flashflood/_static/specs/job_result_v1.0.json";
-    }
-    return data;
-  }
-
-
-  function convertPackage(json) {
-    let specs = {};
-    if (!json.hasOwnProperty('views')) {
-      const now = new Date();
-      const isNW = json.hasOwnProperty('edges');
-      const data = isNW ? convertNetwork(json) : convertTable(json);
-      const nodes = isNW ? data.nodes : data;
-      specs = {
-        $schema: "https://mojaie.github.io/kiwiii/specs/package_v1.0.json",
-        name: data.edges.name,
-        views: [],
-        dataset: []
-      };
-      specs.dataset.push({
-        $schema: "https://mojaie.github.io/kiwiii/specs/collection_v1.0.json",
-        collectionID: nodes.id,
-        name: nodes.name,
-        contents: [{
-          $schema: nodes.$schema,
-          workflowID: nodes.reference.workflow,
-          name: nodes.name,
-          fields: nodes.fields,
-          records: nodes.records,
-          created: nodes.created,
-          status: nodes.status,
-          query: nodes.query,
-          execTime: nodes.execTime,
-          progress: nodes.progress
-        }]
-      });
-      specs.views.push({
-        $schema: "https://mojaie.github.io/kiwiii/specs/datagrid_v1.0.json",
-        viewID: nodes.id,
-        name: nodes.name,
-        viewType: "datagrid",
-        rows: nodes.id,
-        fields: nodes.fields,
-        sortOrder: null,
-        filterText: null,
-        checkpoints: [{
-          type: 'convert',
-          date: now.toString(),
-          description: 'converted from legacy format'
-        }]
-      });
-      if (isNW) {
-        specs.dataset.push({
-          $schema: "https://mojaie.github.io/kiwiii/specs/collection_v1.0.json",
-          collectionID: data.edges.id,
-          name: data.edges.name,
-          contents: [{
-            $schema: data.edges.$schema,
-            workflowID: data.edges.reference.workflow,
-            name: data.edges.name,
-            fields: data.edges.fields,
-            records: data.edges.records,
-            created: data.edges.created,
-            status: data.edges.status,
-            query: data.edges.query,
-            execTime: data.edges.execTime,
-            progress: data.edges.progress
-          }]
-        });
-        specs.views.push({
-          $schema: "https://mojaie.github.io/kiwiii/specs/network_v1.0.json",
-          viewID: data.edges.id,
-          name: data.edges.name,
-          viewType: "network",
-          nodes: nodes.id,
-          edges: data.edges.id,
-          nodeColor: data.edges.snapshot.nodeColor,
-          nodeSize: data.edges.snapshot.nodeSize,
-          nodeLabel: data.edges.snapshot.nodeLabel,
-          nodeLabelColor: data.edges.snapshot.nodeLabelColor,
-          edgeWidth: data.edges.snapshot.edgeWidth,
-          edgeLabel: data.edges.snapshot.edgeLabel,
-          networkThreshold: data.edges.snapshot.networkThreshold,
-          networkThresholdCutoff: data.edges.snapshot.networkThresholdCutoff,
-          fieldTransform: data.edges.snapshot.fieldTransform,
-          coords: data.edges.snapshot.coords,
-          checkpoints: [{
-            type: 'convert',
-            date: now.toString(),
-            description: 'converted from legacy format'
-          }]
-        });
-      }
-      specs.views.filter(e => e.viewType === 'network')
-        .forEach(view => {
-          view.minConnThld = view.networkThresholdCutoff;
-          view.currentConnThld = view.networkThreshold;
-          if (view.hasOwnProperty('nodeLabel')) {
-            view.nodeLabel.field = view.nodeLabel.text;
-          }
-          if (view.hasOwnProperty('edgeLabel')) {
-            view.edgeLabel.field = 'weight';
-          }
-          if (view.hasOwnProperty('edgeWidth')) {
-            view.edgeWidth.field = 'weight';
-          }
-        });
-    } else {
-      specs = json;
-    }
-    specs.views.filter(e => e.viewType === 'network')
-      .forEach(view => {
-        if (!view.nodeColor.field) { view.nodeColor.field = 'index' ;}
-        if (!view.nodeSize.field) { view.nodeSize.field = 'index' ;}
-        if (!view.nodeLabel.field) { view.nodeLabel.field = 'index' ;}
-        if (!view.nodeLabelColor.field) { view.nodeLabelColor.field = 'index' ;}
-        if (!view.edgeColor) {
-          view.edgeColor = {
-            field: 'weight', color: 'monogray',
-            scale: 'linear', domain: [0, 1],
-            range: ['#999999', '#999999'], unknown: '#cccccc'
-          };
-        } else if (!view.edgeColor.field) { view.edgeColor.field = 'weight' ;}
-        if (!view.edgeWidth.field) { view.edgeWidth.field = 'weight' ;}
-        if (!view.edgeLabel.field) { view.edgeLabel.field = 'weight' ;}
-        if (!view.edgeLabelColor) {
-          view.edgeLabelColor = {
-            field: 'weight', color: 'monoblack',
-            scale: 'linear', domain: [1, 1],
-            range: ['#333333', '#333333'], unknown: '#cccccc'
-          };
-        } else if (!view.edgeLabelColor.field) { view.edgeLabelColor.field = 'weight' ;}
-      });
-    return specs;
-  }
-
-
-  var legacy = {
-    convertPackage
-  };
-
   // Increment versions if IDB schema has updated.
-  const pkgStoreVersion = 2;
-  const assetStoreVersion = 1;
+  const sessionStoreVersion = 1;
+  const configStoreVersion = 1;
 
 
   function connect(name, version, createObj) {
@@ -584,11 +144,11 @@ var app = (function (d3, _) {
 
 
   const instance = {
-    pkgs: connect("Packages", pkgStoreVersion, db => {
-      db.createObjectStore("Packages", {keyPath: 'id'});
+    session: connect("Session", sessionStoreVersion, db => {
+      db.createObjectStore("Session", {keyPath: 'id'});
     }),
-    assets: connect("Assets", assetStoreVersion, db => {
-      db.createObjectStore("Assets", {keyPath: 'key'});
+    config: connect("Config", configStoreVersion, db => {
+      db.createObjectStore("Config", {keyPath: 'key'});
     })
   };
 
@@ -596,81 +156,157 @@ var app = (function (d3, _) {
   /**
    * Clear database
    * @param {string} dbid - database ID
+   * @return {Promise} resolve with nothing
    */
-  function clear(dbid) {
+  async function clear(dbid) {
+    const db = await instance[dbid];
+    const tr = db.transaction(db.name, 'readwrite').objectStore(db.name);
     return new Promise((resolve, reject) => {
-      return instance[dbid].then(db => {
-        const req = db.transaction(db.name, 'readwrite')
-            .objectStore(db.name).clear();
-          req.onsuccess = () => resolve();
-          req.onerror = event => reject(event);
-      });
+      const req = tr.clear();
+        req.onsuccess = () => resolve();
+        req.onerror = event => reject(event);
     });
   }
 
 
   /**
    * Delete all data in the local storage
+   * @return {Promise} resolve with nothing
    */
   function clearAll() {
-    return Promise.all([clear('pkgs'), clear('assets')]);
+    return Promise.all([clear('session'), clear('config')]);
   }
 
 
   /**
-   * Returns all packages
-   * @return {Promise} Promise of list of packages
+   * Get config by a key
+   * @param {string} key - key
+   * @return {Promise} config object (if not found, resolve with undefined)
    */
-  function getAllItems() {
-    return new Promise(resolve => {
-      const res = [];
-      return instance.pkgs.then(db => {
-        db.transaction(db.name)
-          .objectStore(db.name).openCursor()
-          .onsuccess = event => {
-            const cursor = event.target.result;
-            if (cursor) {
-              res.push(cursor.value);
-              cursor.continue();
-            } else {
-              resolve(res);
-            }
-          };
-      });
+  async function getConfig(key) {
+    const db = await instance.config;
+    const tr = db.transaction(db.name).objectStore(db.name);
+    return new Promise((resolve, reject) => {
+      const req = tr.get(key);
+      req.onsuccess = event => resolve(event.target.result && event.target.result.value);
+      req.onerror = event => reject(event);
     });
   }
 
 
   /**
-   * Get packages by instance ID
-   * @param {string} id - Package instance ID
-   * @return {array} data store object
+   * Put asset object with a key
+   * @param {string} key - key
+   * @param {*} value - config to store
+   * @return {Promise} resolve with nothing
    */
-  function getItem(id) {
+  async function putConfig(key, value) {
+    const db = await instance.config;
+    const tr = db.transaction(db.name, 'readwrite').objectStore(db.name);
     return new Promise((resolve, reject) => {
-      return instance.pkgs.then(db => {
-        const req = db.transaction(db.name)
-          .objectStore(db.name).get(id);
-        req.onsuccess = event => resolve(event.target.result);
-        req.onerror = event => reject(event);
-      });
+      const req = tr.put({key: key, value: value});
+      req.onsuccess = () => resolve();
+      req.onerror = event => reject(event);
+    });
+  }
+
+
+  /**
+   * Returns all sessions
+   * @return {Promise} Promise of list of sessions
+   */
+   async function getSessionHeaders() {
+    const db = await instance.session;
+    const tr = db.transaction(db.name).objectStore(db.name);
+    return new Promise(resolve => {
+      const res = [];
+      tr.openCursor().onsuccess = event => {
+        const cursor = event.target.result;
+        if (cursor) {
+          const rcd = {
+            id: cursor.value.id,
+            name: cursor.value.name
+          };
+          res.push(rcd);
+          cursor.continue();
+        } else {
+          resolve(res);
+        }
+      };
+    });
+  }
+
+
+  /**
+   * Get the session with the given ID
+   * @param {string} id - session ID
+   * @return {Promise} data store object
+   */
+  async function getSession(id) {
+    const db = await instance.session;
+    const tr = db.transaction(db.name).objectStore(db.name);
+    return new Promise((resolve, reject) => {
+      const req = tr.get(id);
+      req.onsuccess = event => resolve(event.target.result);
+      req.onerror = event => reject(event);
     });
   }
 
 
   /**
    * Put data object in the store
-   * @param {string} value - value to store
+   * @param {*} data - data to store
+   * @return {Promise<string>} session ID
    */
-  function putItem(value) {
+  async function putSession(data) {
+    const db = await instance.session;
+    const tr = db.transaction(db.name, 'readwrite').objectStore(db.name);
+    if (!data.hasOwnProperty("id")) {
+      data.id = misc.uuidv4();  // new ID
+    }
     return new Promise((resolve, reject) => {
-      return instance.pkgs.then(db => {
-        const obj = db.transaction(db.name, 'readwrite')
-          .objectStore(db.name);
-        const req = obj.put(value);
-        req.onerror = event => reject(event);
-        req.onsuccess = () => resolve();
-      });
+      const req = tr.put(data);
+      req.onsuccess = () => resolve(data.id);
+      req.onerror = event => reject(event);
+    });
+  }
+
+
+  /**
+   * Delete a session
+   * @param {string} id - session ID
+   * @return {Promise} resolve with nothing
+   */
+  async function deleteSession(id) {
+    const db = await instance.session;
+    const tr = db.transaction(db.name, 'readwrite').objectStore(db.name);
+    return new Promise((resolve, reject) => {
+      const req = tr.delete(id);
+      req.onsuccess = () => resolve();
+      req.onerror = event => reject(event);
+    });
+  }
+
+
+  /**
+   * Add new snapshot to the session
+   * @param {string} sessionid - session ID
+   * @param {Object} snapshot - snapshot object
+   * @return {Promise} resolve with nothing
+   */
+  async function appendSnapshot(sessionid, snapshot) {
+    const db = await instance.session;
+    const tr = db.transaction(db.name).objectStore(db.name);
+    const data = await new Promise((resolve, reject) => {
+      const req = tr.get(sessionid);
+      req.onsuccess = event => resolve(event.target.result);
+      req.onerror = event => reject(event);
+    });
+    data.snapshot.push(snapshot);
+    return new Promise((resolve, reject) => {
+      const req = tr.put(data);
+      req.onsuccess = () => resolve();
+      req.onerror = event => reject(event);
     });
   }
 
@@ -680,259 +316,100 @@ var app = (function (d3, _) {
    * @param {string} id - Package instance ID
    * @param {function} updater - update function
    */
-  function updateItem(id, updater) {
+   async function deleteSnapshot(sessionid, idx) {
+    const db = await instance.session;
+    const tr = db.transaction(db.name).objectStore(db.name);
+    const data = await new Promise((resolve, reject) => {
+      const req = tr.get(sessionid);
+      req.onsuccess = event => resolve(event.target.result);
+      req.onerror = event => reject(event);
+    });
+    data.snapshot.splice(idx, 1);
     return new Promise((resolve, reject) => {
-      return instance.pkgs.then(db => {
-        const obj = db.transaction(db.name, 'readwrite')
-          .objectStore(db.name);
-        const req = obj.get(id);
-        req.onerror = event => reject(event);
-        req.onsuccess = event => {
-          const res = event.target.result;
-          updater(res);
-          const upd = obj.put(res);
-          upd.onsuccess = () => resolve();
-          upd.onerror = event => reject(event);
-        };
-      });
-    });
-  }
-
-
-  /**
-   * Delete a package
-   * @param {string} id - Package instance ID
-   */
-  function deleteItem(id) {
-    return new Promise((resolve, reject) => {
-      return instance.pkgs.then(db => {
-        const req = db.transaction(db.name, 'readwrite')
-          .objectStore(db.name).delete(id);
-        req.onerror = event => reject(event);
-        req.onsuccess = () => resolve();
-      });
-    });
-  }
-
-
-  /**
-   * Returns a view
-   * @param {string} id - Package instance ID
-   * @param {string} viewID - view ID
-   * @return {array} view objects
-   */
-  function getView(id, viewID) {
-    return getItem(id)
-      .then(pkg => pkg.views.find(e => e.viewID === viewID));
-  }
-
-
-  /**
-   * Append a view next to a specific view
-   * @param {string} id - Package instance ID
-   * @param {string} viewID - view ID
-   * @param {object} viewObj - view object
-   */
-  function appendView(id, viewID, viewObj) {
-    return updateItem(id, item => {
-      const pos = item.views.findIndex(e => e.viewID === viewID);
-      item.views.splice(pos + 1, 0, viewObj);
-    });
-  }
-
-
-  /**
-   * Update view
-   * @param {string} id - Package instance ID
-   * @param {string} viewID - view ID
-   * @param {object} viewObj - view object or update function
-   */
-  function updateView(id, viewID, viewObj) {
-    return updateItem(id, item => {
-      const pos = item.views.findIndex(e => e.viewID === viewID);
-      if (___default["default"].isFunction(viewObj)) {
-        viewObj(item.views[pos]);
-      } else {
-        item.views[pos] = viewObj;
-      }
-    });
-  }
-
-
-  /**
-   * Delete a data object from the store
-   * @param {string} id - Package instance ID
-   * @return {integer} - number of deleted items
-   */
-  function deleteView(id, viewID) {
-    return updateItem(id, item => {
-      const pos = item.views.findIndex(e => e.viewID === viewID);
-      item.views.splice(pos, 1);
-      // prune orphaned collections
-      const bin = {};
-      item.dataset.forEach(e => { bin[e.collectionID] = 0; });
-      item.views.forEach(view => {
-        ['rows', 'items', 'nodes', 'edges']
-          .filter(e => view.hasOwnProperty(e))
-          .forEach(e => { bin[view[e]] += 1; });
-      });
-      Object.entries(bin).forEach(entry => {
-        if (!entry[1]) {
-          const i = item.dataset.findIndex(e => e.collectionID === entry[0]);
-          item.dataset.splice(i, 1);
-        }
-      });
-    });
-  }
-
-
-  /**
-   * Returns all collections in the store
-   * @return {array} Collection objects
-   */
-  function getAllCollections() {
-    return getAllItems()
-      .then(items => ___default["default"].flatten(
-        items.map(item => {
-          return item.dataset.map(coll => {
-            coll.instance = item.id;
-            return coll;
-          });
-        })
-      ));
-  }
-
-
-  /**
-   * Returns a collection
-   * @param {string} id - Package instance ID
-   * @param {string} collID - Collection ID
-   * @return {array} Collection objects
-   */
-  function getCollection(id, collID) {
-    return getItem(id)
-      .then(pkg => pkg.dataset.find(e => e.collectionID === collID));
-  }
-
-
-  function addCollection(id, collID, collObj) {
-    return updateItem(id, item => {
-      item.dataset.push(collObj);
-    });
-  }
-
-  /**
-   * Update collection
-   * @param {string} id - Package instance ID
-   * @param {string} collID - Collection ID
-   * @param {object} collObj - Collection object or update function
-   */
-  function updateCollection(id, collID, collObj) {
-    return updateItem(id, item => {
-      const pos = item.dataset.findIndex(e => e.collectionID === collID);
-      if (___default["default"].isFunction(collObj)) {
-        collObj(item.dataset[pos]);
-      } else {
-        item.dataset[pos] = collObj;
-      }
-    });
-  }
-
-
-  /**
-   * Insert a data object to the store
-   * @param {object} data - data
-   * @return {string} - id if sucessfully added
-   */
-  function importItem(data) {
-    // Legacy format converter
-    data = legacy.convertPackage(data);
-
-    const now = new Date();
-    data.id = misc.uuidv4().slice(0, 8);
-    data.sessionStarted = now.toString();
-    return putItem(data);
-  }
-
-
-
-
-
-
-  /**
-   * Store new network view
-   * @param {string} instance - Package instance ID
-   * @param {string} nodesID - ID of nodes collection
-   * @param {string} nodesName - Name of nodes collection
-   * @param {object} response - Response object
-   */
-  function newNetwork(instance, nodesID, nodesName, response) {
-    const viewID = misc.uuidv4().slice(0, 8);
-    const edgesID = response.workflowID.slice(0, 8);
-    return updateItem(instance, item => {
-      item.views.push({
-        $schema: "https://mojaie.github.io/kiwiii/specs/network_v1.0.json",
-        viewID: viewID,
-        name: `${nodesName}_${response.name}`,
-        viewType: 'network',
-        nodes: nodesID,
-        edges: edgesID,
-        minConnThld: response.query.params.threshold
-      });
-      item.dataset.push({
-        $schema: "https://mojaie.github.io/kiwiii/specs/collection_v1.0.json",
-        collectionID: edgesID,
-        name: response.name,
-        contents: [response]
-      });
-    }).then(() => viewID);
-  }
-
-
-  /**
-   * Get asset by a key
-   * @param {string} key - key
-   * @return {array} asset object (if not found, resolve with undefined)
-   */
-  function getAsset(key) {
-    return new Promise((resolve, reject) => {
-      return instance.assets.then(db => {
-        const req = db.transaction(db.name)
-          .objectStore(db.name).get(key);
-        req.onsuccess = event => {
-          const undef = event.target.result === undefined;
-          const value = undef ? undefined : event.target.result.value;
-          resolve(value);
-        };
-        req.onerror = event => reject(event);
-      });
-    });
-  }
-
-  /**
-   * Put asset object with a key
-   * @param {string} key - key
-   * @param {string} content - asset to store
-   */
-  function putAsset(key, content) {
-    return new Promise((resolve, reject) => {
-      return instance.assets.then(db => {
-        const obj = db.transaction(db.name, 'readwrite')
-          .objectStore(db.name);
-        const req = obj.put({key: key, value: content});
-        req.onerror = event => reject(event);
-        req.onsuccess = () => resolve();
-      });
+      const req = tr.put(data);
+      req.onsuccess = () => resolve();
+      req.onerror = event => reject(event);
     });
   }
 
 
   var idb = {
-    clear, clearAll, getAllItems, getItem, updateItem, deleteItem,
-    getView, appendView, updateView, deleteView,
-    getAllCollections, getCollection, addCollection, updateCollection,
-    importItem, newNetwork,
-    getAsset, putAsset
+    clear, clearAll,
+    getConfig, putConfig,
+    getSessionHeaders,
+    getSession, putSession, deleteSession,
+    appendSnapshot, deleteSnapshot
+  };
+
+  function readFile(file, sizeLimit, blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      const truncated = sizeLimit ? file.slice(0, sizeLimit) : file;
+      reader.onload = event => resolve(event.target.result);
+      reader.onerror = error => reject(error);
+      if (blob) {
+        reader.readAsArrayBuffer(truncated);
+      } else {
+        reader.readAsText(truncated);
+      }
+    });
+  }
+
+
+  function parseJSON(data, compressed) {
+    const text = compressed ? pako__default["default"].inflate(data, {to: 'string'}) : data;
+    return JSON.parse(text);
+  }
+
+
+  function loadJSON(file) {
+    const compressed = file.name.endsWith('c') || file.name.endsWith('.gz');
+    return readFile(file, false, compressed)
+      .then(data => parseJSON(data, compressed));
+  }
+
+
+  function fetchJSON(url) {
+    const decoded = decodeURIComponent(url);
+    const compressed = decoded.endsWith('c') || decoded.endsWith('.gz');
+    return fetch(decoded)
+      .then(res => compressed ? res.arrayBuffer() : res.json())
+      .then(data => parseJSON(data, compressed));
+  }
+
+
+  function downloadDataFile(data, name) {
+    try {
+      // cannot hundle large file with dataURI scheme
+      // url = 'data:application/json,' + encodeURIComponent(JSON.stringify(json))
+      const url = window.URL.createObjectURL(new Blob([data]));
+      const a = document.createElement('a');
+      a.download = name;
+      a.href = url;
+      // a.click() does not work on firefox
+      a.dispatchEvent(new MouseEvent('click', {
+        'view': window,
+        'bubbles': true,
+        'cancelable': false
+      }));
+      // window.URL.revokeObjectURL(url) does not work on firefox
+    } catch (e) {
+      // no DOM (unit testing)
+    }
+  }
+
+
+  function downloadJSON(json, name, compress=true) {
+    const str = JSON.stringify(json);
+    const data = compress ? pako__default["default"].gzip(str) : str;
+    const ext = `.ap${compress ? 'c' : 'r'}`;
+    downloadDataFile(data, `${name}${ext}`);
+  }
+
+
+  var hfile = {
+    readFile, parseJSON, loadJSON, fetchJSON,
+    downloadDataFile, downloadJSON
   };
 
   const assetBaseURL = '../assets/';
@@ -1034,7 +511,7 @@ var app = (function (d3, _) {
     alert, updateAlert, invalidFeedback, updateInvalidMessage
   };
 
-  const iconBaseURL = '../assets/icon/';
+  const iconBaseURL = './asset/icon/';
 
 
   function buttonBox(selection, label, type) {
@@ -1179,132 +656,68 @@ var app = (function (d3, _) {
     dropdownMenuFile, dropdownMenuFileValue
   };
 
-  function dialogBase(selection, id) {
-    selection
-        .classed('modal', true)
-        .attr('tabindex', -1)
-        .attr('role', 'dialog')
-        .attr('aria-labelledby', '')
-        .attr('aria-hidden', true)
-        .attr('id', id);
-    selection.append('div')
-        .classed('modal-dialog', true)
-        .attr('role', 'document')
-      .append('div')
-        .classed('modal-content', true);
-  }
-
-
-  function confirmDialog(selection, id) {
-    const base = selection.call(dialogBase, id)
-        .select('.modal-content');
-    // body
-    base.append('div')
-        .classed('modal-body', true)
-      .append('div')
-        .classed('message', true);
-    // footer
-    const footer = base.append('div')
-        .classed('modal-footer', true);
-    footer.append('button')
-        .classed('btn', true)
-        .classed('btn-outline-secondary', true)
-        .classed('cancel', true)
-        .attr('type', 'button')
-        .attr('data-dismiss', 'modal')
-        .text('Cancel');
-    footer.append('button')
-        .classed('btn', true)
-        .classed('btn-warning', true)
-        .classed('ok', true)
-        .attr('type', 'button')
-        .attr('data-dismiss', 'modal')
-        .text('OK')
-        .on('click', () => {
-          selection.dispatch('submit');
-        });
-  }
-
-
-  function updateConfirmDialog(selection, message) {
-    selection.select('.message').text(message);
-  }
-
-
-  function submitDialog(selection, id, title) {
-    const base = selection.call(dialogBase, id)
-        .select('.modal-content');
-    // header
-    const header = base.append('div')
-        .classed('modal-header', true);
-    header.append('h4')
-        .classed('modal-title', true)
-        .text(title);
-    header.append('button')
-        .attr('type', 'button')
-        .attr('data-dismiss', 'modal')
-        .attr('aria-label', 'Close')
-        .classed('close', true)
-      .append('span')
-        .attr('aria-hidden', true)
-        .html('&times;');
-    // body
-    base.append('div')
-        .classed('modal-body', true);
-    // footer
-    base.append('div')
-        .classed('modal-footer', true)
-      .append('button')
-        .classed('btn', true)
-        .classed('btn-primary', true)
-        .classed('submit', true)
-        .attr('type', 'button')
-        .attr('data-dismiss', 'modal')
-        .text('Submit')
-        .on('click', () => {
-          // Dismiss before submit
-          // Submit event can update the modal itself
-          // (ex. disable submit button before onSubmit call has completed)
-          $(`#${id}`).modal('hide');
-          selection.dispatch('submit');
-        });
-  }
-
-
-  var modal = {
-    confirmDialog, updateConfirmDialog, submitDialog
+  const scales = {
+    color: {
+      default: {
+        range: ['#7fffd4'],
+        unknown: '#7fffd4'
+      },
+      monogray: {
+        range: ['#cccccc'],
+        unknown: '#cccccc'
+      },
+      blue: {
+        range: ['#778899', '#7fffd4'],
+        unknown: '#f0f0f0'
+      },
+      green: {
+        range: ['#778899', '#7fff00'],
+        unknown: '#f0f0f0'
+      },
+      red: {
+        range: ['#778899', '#fa8072'],
+        unknown: '#f0f0f0'
+      },
+      category10: {
+        range: ['#8dd3c7','#ffffb3','#bebada','#fb8072','#80b1d3','#fdb462',
+          '#b3de69','#fccde5','#bc80bd','#ccebc5'],
+        unknown: '#f0f0f0'
+      },
+      cbsafe: {
+        range: ['#543005','#8c510a','#bf812d','#dfc27d','#f6e8c3','#c7eae5',
+          '#80cdc1','#35978f','#01665e','#003c30'],
+        unknown: '#f0f0f0'
+      }
+    },
+    nodeSize: {
+      small: {
+        range: [10, 40],
+        unknown: 10
+      },
+      medium: {
+        range: [20, 80],
+        unknown: 20
+      },
+      large: {
+        range: [40, 160],
+        unknown: 40
+      }
+    },
+    edgeWidth: {
+      thin: {
+        range: [2, 10],
+        unknown: 10
+      },
+      medium: {
+        range: [4, 20],
+        unknown: 20
+      },
+      thick: {
+        range: [8, 40],
+        unknown: 40
+      }
+    }
   };
-
-  const colorScales = [
-    {key: 'monoblack', type: 'monocolor', colors: ['#333333'], unknown: '#333333'},
-    {key: 'monogray', type: 'monocolor', colors: ['#cccccc'], unknown: '#cccccc'},
-    {key: 'nodeDefault', type: 'monocolor', colors: ['#7fffd4'], unknown: '#7fffd4'},
-    {key: 'aquamarine', type: 'bicolor',
-     colors: ['#778899', '#7fffd4'], unknown: '#f0f0f0'},
-    {key: 'chartreuse', type: 'bicolor',
-     colors: ['#778899', '#7fff00'], unknown: '#f0f0f0'},
-    {key: 'salmon', type: 'bicolor',
-     colors: ['#778899', '#fa8072'], unknown: '#f0f0f0'},
-    {key: 'violet', type: 'bicolor',
-     colors: ['#778899', '#ee82ee'], unknown: '#f0f0f0'},
-    {key: 'temperature', type: 'tricolor',
-     colors: ['#87ceeb', '#fff5ee', '#fa8072'], unknown: '#f0f0f0'},
-    {key: 'spectrum', type: 'tricolor',
-     colors: ['#6495ed', '#ccff66', '#ffa500'], unknown: '#f0f0f0'},
-    {key: 'category10', type: 'categorical',
-     colors: ['#8dd3c7','#ffffb3','#bebada','#fb8072','#80b1d3','#fdb462',
-      '#b3de69','#fccde5','#bc80bd','#ccebc5'], unknown: '#f0f0f0'},
-    {key: 'cbsafe', type: 'categorical',
-     colors: ['#543005','#8c510a','#bf812d','#dfc27d','#f6e8c3','#c7eae5',
-     '#80cdc1','#35978f','#01665e','#003c30'], unknown: '#f0f0f0'},
-    {key: 'category20', type: 'categorical',
-     colors: d3__default["default"].schemePaired.concat(d3__default["default"].schemeSet2), unknown: '#f0f0f0'},
-    {key: 'category40', type: 'categorical',
-     colors: d3__default["default"].schemePaired.concat(d3__default["default"].schemePastel2, d3__default["default"].schemeSet2, d3__default["default"].schemeSet3),
-     unknown: '#f0f0f0'},
-    {key: 'custom', type: 'custom', colors: ['#ffffff'], text: 'custom'}
-  ];
-
 
   const types = [
     {key: 'linear', name: 'Linear', func: d3__default["default"].scaleLinear},
@@ -1314,29 +727,23 @@ var app = (function (d3, _) {
   ];
 
 
-  function scaleFunction(state) {
-    const cscale = colorScales.find(e => e.key === state.color);
-    let range;
-    let unknown;
-    if (cscale && cscale.key !== 'custom') {
-        range = cscale.colors;
-        unknown = cscale.unknown;
-    } else {
-      range = state.range;
-      unknown = state.unknown;
-    }
+  function scaleFunction(params, rangeType) {
+    const scale = scales[rangeType][params.rangePreset];
+    const range = scale.range;
+    const unknown = scale.unknown;
+
     let domain = null;
     if (range.length === 3) {
-      const mid = (parseFloat(state.domain[0]) + parseFloat(state.domain[1])) / 2;
-      domain = [state.domain[0], mid, state.domain[1]];
+      const mid = (parseFloat(params.domain[0]) + parseFloat(params.domain[1])) / 2;
+      domain = [params.domain[0], mid, params.domain[1]];
     } else {
-      domain = state.domain;
+      domain = params.domain;
     }
     // Build
-    let scaleFunc = types.find(e => e.key === state.scale).func();
+    let scaleFunc = types.find(e => e.key === params.scale).func();
     scaleFunc = scaleFunc.domain(domain);
     scaleFunc = scaleFunc.range(range);
-    if (['linear', 'log'].includes(state.scale)) {
+    if (['linear', 'log'].includes(params.scale)) {
       scaleFunc = scaleFunc.clamp(true);
     }
 
@@ -1345,10 +752,10 @@ var app = (function (d3, _) {
       if (d === '' || typeof d === 'undefined' || d === null) {
         return unknown;  // invalid values
       }
-      if (['linear', 'log'].includes(state.scale) && parseFloat(d) != d) {
+      if (['linear', 'log'].includes(params.scale) && parseFloat(d) != d) {
         return unknown;  // texts
       }
-      if (state.scale === 'log' && d <= 0) {
+      if (params.scale === 'log' && d <= 0) {
         return unknown;  // negative values in log scale
       }
       // Apply function
@@ -1372,7 +779,7 @@ var app = (function (d3, _) {
 
 
   var cscale = {
-    colorScales, types, scaleFunction, isD3Format
+    scales, types, scaleFunction, isD3Format
   };
 
   function monocolorBar(selection, colors, text) {
@@ -1528,6 +935,11 @@ var app = (function (d3, _) {
       .attr('transform', `translate(${tx}, ${ty}) scale(${tk})`);
   }
 
+  function transform2(selection, state) {
+    const st = state.transform;
+    selection.select('.field')
+      .attr('transform', `translate(${st.x}, ${st.y}) scale(${st.k})`);
+  }
 
   function resize(selection, state) {
     const area = selection.node();
@@ -1544,9 +956,6 @@ var app = (function (d3, _) {
 
 
   function viewFrame(selection, state) {
-    selection
-      .style('width', '100%')
-      .style('height', '100%');
     selection.select('.view').remove(); // Clean up
     selection.append('svg')
       .classed('view', true);
@@ -1558,9 +967,7 @@ var app = (function (d3, _) {
     selection
       .attr('preserveAspectRatio', 'xMinYMin meet')
       .attr('pointer-events', 'all')
-      .attr('viewBox', `0 0 ${state.viewBox.right} ${state.viewBox.bottom}`)
-      .style('width', '100%')
-      .style('height', '100%');
+      .attr('viewBox', `0 0 ${state.viewBox.right} ${state.viewBox.bottom}`);
 
     // Clean up
     selection.selectAll('g, rect').remove();
@@ -1586,7 +993,7 @@ var app = (function (d3, _) {
 
 
   var transform$1 = {
-    transform, resize, viewFrame, view
+    transform, transform2, resize, viewFrame, view
   };
 
   function updateFormValue(selection, value) {
@@ -1846,6 +1253,102 @@ var app = (function (d3, _) {
     fileInputBox, clearFileInput, fileInputValue, fileInputValid
   };
 
+  function dialogBase(selection, id) {
+    selection
+        .classed('modal', true)
+        .attr('tabindex', -1)
+        .attr('role', 'dialog')
+        .attr('aria-labelledby', '')
+        .attr('aria-hidden', true)
+        .attr('id', id);
+    selection.append('div')
+        .classed('modal-dialog', true)
+        .attr('role', 'document')
+      .append('div')
+        .classed('modal-content', true);
+  }
+
+
+  function confirmDialog(selection, id) {
+    const base = selection.call(dialogBase, id)
+        .select('.modal-content');
+    // body
+    base.append('div')
+        .classed('modal-body', true)
+      .append('div')
+        .classed('message', true);
+    // footer
+    const footer = base.append('div')
+        .classed('modal-footer', true);
+    footer.append('button')
+        .classed('btn', true)
+        .classed('btn-outline-secondary', true)
+        .classed('cancel', true)
+        .attr('type', 'button')
+        .attr('data-dismiss', 'modal')
+        .text('Cancel');
+    footer.append('button')
+        .classed('btn', true)
+        .classed('btn-warning', true)
+        .classed('ok', true)
+        .attr('type', 'button')
+        .attr('data-dismiss', 'modal')
+        .text('OK')
+        .on('click', () => {
+          selection.dispatch('submit');
+        });
+  }
+
+
+  function updateConfirmDialog(selection, message) {
+    selection.select('.message').text(message);
+  }
+
+
+  function submitDialog(selection, id, title) {
+    const base = selection.call(dialogBase, id)
+        .select('.modal-content');
+    // header
+    const header = base.append('div')
+        .classed('modal-header', true);
+    header.append('h4')
+        .classed('modal-title', true)
+        .text(title);
+    header.append('button')
+        .attr('type', 'button')
+        .attr('data-dismiss', 'modal')
+        .attr('aria-label', 'Close')
+        .classed('close', true)
+      .append('span')
+        .attr('aria-hidden', true)
+        .html('&times;');
+    // body
+    base.append('div')
+        .classed('modal-body', true);
+    // footer
+    base.append('div')
+        .classed('modal-footer', true)
+      .append('button')
+        .classed('btn', true)
+        .classed('btn-primary', true)
+        .classed('submit', true)
+        .attr('type', 'button')
+        .attr('data-dismiss', 'modal')
+        .text('Submit')
+        .on('click', () => {
+          // Dismiss before submit
+          // Submit event can update the modal itself
+          // (ex. disable submit button before onSubmit call has completed)
+          $(`#${id}`).modal('hide');
+          selection.dispatch('submit');
+        });
+  }
+
+
+  var modal = {
+    confirmDialog, updateConfirmDialog, submitDialog
+  };
+
   const id = 'rename-dialog';
   const title = 'Rename';
 
@@ -1886,239 +1389,6 @@ var app = (function (d3, _) {
   var renameDialog = {
     menuLink, body, updateBody, value
   };
-
-  /**
-   * Convert single field mapping to multi field mapping
-   * @param {object} mapping - single field mapping
-   * @return {object} multi field mapping
-   */
-  function singleToMulti(mapping) {
-    const newMapping = {};
-    Object.entries(mapping.mapping).forEach(m => {
-      newMapping[m[0]] = [m[1]];
-    });
-    return {
-      created: mapping.created,
-      fields: [mapping.field],
-      key: mapping.key,
-      mapping: newMapping
-    };
-  }
-
-
-  /**
-   * Convert field mapping to table
-   * @param {object} mapping - field mapping
-   * @return {object} table object
-   */
-  function mappingToTable(mapping) {
-    const mp = mapping.hasOwnProperty('field') ? singleToMulti(mapping) : mapping;
-    const keyField = {key: mp.key, format: 'text'};
-    const data = {
-      fields: [keyField].concat(mp.fields),
-      records: Object.entries(mp.mapping).map(entry => {
-        const rcd = {};
-        rcd[mp.key] = entry[0];
-        mp.fields.forEach((f, i) => {
-          rcd[f.key] = entry[1][i];
-        });
-        return rcd;
-      })
-    };
-    return data;
-  }
-
-
-  /**
-   * Convert table to field mapping
-   * @param {object} table - table
-   * @param {object} key - key
-   * @return {object} field mapping
-   */
-  function tableToMapping(table, key, ignore=['index']) {
-    const now = new Date();
-    const mapping = {
-      created: now.toString(),
-      fields: table.fields.filter(e => e.key !== key)
-        .filter(e => !ignore.includes(e.key)),
-      key: key,
-      mapping: {}
-    };
-    table.records.forEach(row => {
-      mapping.mapping[row[key]] = mapping.fields.map(e => row[e.key]);
-    });
-    return mapping;
-  }
-
-
-  /**
-   * Convert csv text to field mapping
-   * @param {string} csvString - csv data text
-   * @return {object} field mapping
-   */
-  function csvToMapping(csvString) {
-    const lines = csvString.split(/\n|\r|\r\n/);
-    const header = lines.shift().split(',');
-    const key = header.shift();
-    const now = new Date();
-    const headerIdx = [];
-    const fields = [];
-    header.forEach((h, i) => {
-      if (h === '') return;
-      headerIdx.push(i);
-      fields.push({key: h, format: 'text'});
-    });
-    const mapping = {
-      created: now.toString(),
-      fields: fields,
-      key: key,
-      mapping: {}
-    };
-    lines.forEach(line => {
-      const values = line.split(',');
-      const k = values.shift();
-      mapping.mapping[k] = Array(headerIdx.length);
-      headerIdx.forEach(i => {
-        mapping.mapping[k][i] = values[i];
-      });
-    });
-    return mapping;
-  }
-
-
-  /**
-   * Apply mapping to the data (in-place)
-   * @param {object} data - datatable JSON
-   * @param {object} mapping - mapping JSON
-   * @return {undefined} undefined
-   */
-  function apply(data, mapping) {
-    const mp = mapping.hasOwnProperty('field') ? singleToMulti(mapping) : mapping;
-    data.records
-      .filter(rcd => mp.mapping.hasOwnProperty(rcd[mp.key]))
-      .forEach(rcd => {
-        mp.fields.forEach((fd, i) => {
-          rcd[fd.key] = mp.mapping[rcd[mp.key]][i];
-        });
-      });
-    data.fields =  ___default["default"](data.fields)
-      .concat(mp.fields)
-      .uniqBy('key')
-      .value();
-  }
-
-  var mapper = {
-    singleToMulti, mappingToTable, tableToMapping, csvToMapping, apply
-  };
-
-  class Collection {
-    /**
-     * Create Collection from a flashflood response datatable
-     * If data is not specified, put datatables later by this.append(data)
-     * @param {object} coll - Collection or response object
-     */
-    constructor(coll) {
-      // Settings
-      this.autoIndex = 'index';  // enumerate records
-
-      this.collectionID = coll.collectionID || null;
-      this.instance = coll.instance || null;
-      this.name = coll.name || null;
-      if (coll.records) {
-        this.contents = [coll];
-        this.fields = [];
-      } else {
-        this.contents = coll.contents;
-        this.fields = coll.fields || [];
-      }
-      this.contents.forEach(content => {
-        content.fields.forEach(e => this.addField(e));
-      });
-    }
-
-    /**
-     * Add fields
-     * @param {array} fs - list of fields
-     */
-    addField(field) {
-      if (this.fields.find(e => e.key === field.key)) return;
-      if (!field.hasOwnProperty('name')) field.name = field.key;
-      if (!field.hasOwnProperty('visible')) field.visible = true;
-      if (field.hasOwnProperty('d3_format')) field.format = 'd3_format';
-      if (!field.hasOwnProperty('format')) field.format = 'raw';
-      this.fields.push(field);
-    }
-
-    /**
-     * Update fields properties
-     * @param {array} fs - list of fields
-     */
-    updateFields(fs) {
-      this.fields = [];
-      fs.forEach(e => this.addField(e));
-    }
-
-    /**
-     * Join fields
-     * @param {object} mapping - column mapper object
-     */
-    joinFields(mapping) {
-      this.contents.forEach(c => {
-        mapper.apply(c, mapping);
-      });
-      if (mapping.hasOwnProperty('fields')) {
-        mapping.fields.forEach(e => this.addField(e));
-      } else {
-        this.addField(mapping.field);
-      }
-    }
-
-    /**
-     * Apply function to the original data records
-     * new fields should be manually added by Collection.addField
-     * @param {function} func - function to be applied
-     */
-    apply(func) {
-      this.contents.forEach(content => {
-        content.records.forEach(rcd => {
-          func(rcd);
-        });
-      });
-    }
-
-    /**
-     * Return all records of the collection
-     * @return {array} records
-     */
-    records() {
-      return ___default["default"].flatten(this.contents.map(e => e.records));
-    }
-
-
-    /**
-     * Return total number of records
-     * @return {float} total number of records
-     */
-    size() {
-      return ___default["default"].sum(this.contents.map(e => e.records.length));
-    }
-
-
-    /**
-     * Export collection object as JSON
-     * @return {object} collection JSON
-     */
-    // TODO: new method that exports only visible fields
-    export() {
-      return {
-        $schema: "https://mojaie.github.io/kiwiii/specs/collection_v1.0.json",
-        collectionID: this.collectionID,
-        name: this.name,
-        fields: this.fields,
-        contents: this.contents
-      };
-    }
-  }
 
   class TransformState {
     constructor(width, height, transform) {
@@ -2212,100 +1482,45 @@ var app = (function (d3, _) {
   }
 
   class NetworkState extends TransformState {
-    constructor(view, nodes, edges) {
-      super(1200, 1200, view.fieldTransform);
+    constructor(session) {
+      super(1200, 1200, null);
+      // Session properties
+      this.sessionName = session.name;
+      this.nodes = session.nodes;
+      this.nodes.forEach((e, i) => {
+        e.__index = i;  // internal id for d3.force
+        e.__selected = false;  // for multiple selection
+      });
+      this.edges = session.edges;
+      this.edges.forEach((e, i) => {
+        // internal id for d3.force
+        e.__source = e.source;
+        e.__target = e.target;
+        e.__index = i;
+      });
 
-      /* Settings */
+      // Snapshot properties
+      this.name = null;
+      this.filters = null;
+      this.positions = null;
+      this.config = null;
+      this.appearance = null;
 
-      // Focused view mode (num of nodes displayed are less than the thld)
-      // Show node contents
-      // Disable smooth transition
-      this.focusedViewThreshold = 100;
-      this.enableFocusedView = true;
-      this.focusedView = false;
-      // Overlook view mode (num of nodes displayed are less than the thld)
-      // Hide edges
-      this.overlookViewThreshold = 500;
-      this.enableOverlookView = true;
-      this.overlookView = false;
+      // filtered elements
+      this.fnodes = [];
+      this.fedges = [];
+      this.adjacency = [];
 
-      // Legend orientation
-      this.legendOrient = 'top-left';
+      // visible elements
+      this.vnodes = [];
+      this.vedges = [];
 
-      /* Attributes */
-
-      this.viewID = view.viewID || null;
-      this.instance = view.instance || null;
-      this.name = view.name;
-
-      this.nodes = new Collection(nodes);
-      this.edges = new Collection(edges);
-
-      /* Appearance */
-      const defaultNodeField = 'index';
-      const defaultEdgeField = 'weight';
-
-      this.nodeColor = {
-        field: defaultNodeField, color: 'nodeDefault',
-        scale: 'linear', domain: [0, 1],
-        range: ['#7fffd4', '#7fffd4'], unknown: '#7fffd4',
-        legend: true
-      };
-      Object.assign(this.nodeColor, view.nodeColor || {});
-
-      this.nodeSize = {
-        field: defaultNodeField, scale: 'linear', domain: [1, 1],
-        range: [40, 40], unknown: 40, legend: false
-      };
-      Object.assign(this.nodeSize, view.nodeSize || {});
-
-      this.nodeLabel = {
-        field: defaultNodeField, size: 20, visible: false
-      };
-      Object.assign(this.nodeLabel, view.nodeLabel || {});
-
-      this.nodeLabelColor = {
-        field: defaultNodeField, color: 'monoblack',
-        scale: 'linear', domain: [1, 1],
-        range: ['#333333', '#333333'], unknown: '#cccccc',
-        legend: false
-      };
-      Object.assign(this.nodeLabelColor, view.nodeLabelColor || {});
-
-      this.edgeColor = {
-        field: defaultEdgeField, color: 'monogray',
-        scale: 'linear', domain: [0, 1],
-        range: ['#999999', '#999999'], unknown: '#cccccc'
-      };
-      Object.assign(this.edgeColor, view.edgeColor || {});
-
-      this.edgeWidth = {
-        field: defaultEdgeField, scale: 'linear', domain: [0.5, 1],
-        range: [10, 10], unknown: 1
-      };
-      Object.assign(this.edgeWidth, view.edgeWidth || {});
-
-      this.edgeLabel = {
-        field: defaultEdgeField, size: 12, visible: false
-      };
-      Object.assign(this.edgeLabel, view.edgeLabel || {});
-
-      this.edgeLabelColor = {
-        field: defaultEdgeField, color: 'monoblack',
-        scale: 'linear', domain: [1, 1],
-        range: ['#333333', '#333333'], unknown: '#cccccc'
-      };
-      Object.assign(this.edgeLabelColor, view.edgeLabelColor || {});
-
-      // Connection threshold
-      this.connThldField = view.connThldField || defaultEdgeField;
-      this.minConnThld = view.minConnThld;
-      this.currentConnThld = view.currentConnThld || view.minConnThld;
+      // Visibility
+      this.showNodeImage = false;
+      this.showEdge = false;
 
       // Force
-      this.coords = view.coords;
-      this.forceActive = !this.coords;
-      this.forceType = view.forceType || 'aggregate';
+      this.forceActive = true;  // TODO: if no initial positions
 
       // Event listeners
       this.zoomListener = null;
@@ -2328,32 +1543,102 @@ var app = (function (d3, _) {
       this.restartNotifier = () => {};
       this.tickCallback = () => {};
 
-      // Working copies
-      // D3.force does some destructive operations
-      this.ns = null;
-      this.es = null;
+      // Initialize snapshot
+      let snapshot = {};
+      if (session.hasOwnProperty("snapshots") && session.snapshots.length > 0) {
+        snapshot = session.snapshots.slice(-1)[0];
+      }
+      this.applySnapshot(snapshot);
     }
 
-    updateWorkingCopy() {
-      if (this.ns) {
-        this.coords = this.ns.map(e => ({x: e.x, y: e.y}));
+    applySnapshot(snapshot) {
+      this.name = snapshot.hasOwnProperty("name") ? snapshot.name : "default";
+      this.filters = snapshot.hasOwnProperty("filters") ? snapshot.filters : [];
+      this.positions = snapshot.hasOwnProperty("positions") ? snapshot.filters : [];
+      this.config = snapshot.hasOwnProperty("config") ? snapshot.config : {
+        showNodeImageThreshold: 100,
+        alwaysShowNodeImage: false,
+        showEdgeThreshold: 500,
+        alwaysShowEdge: false,
+        legendOrientation: 'top-left',
+        forceParam: 'aggregate'
+      };
+      this.appearance = snapshot.hasOwnProperty("appearance") ? snapshot.appearance : {
+        nodeColor: {
+          field: null, rangePreset: 'default',
+          scale: 'linear', domain: [0, 1]
+        },
+        nodeSize: {
+          field: null, rangePreset: 'medium',
+          scale: 'linear', domain: [1, 1]
+        },
+        nodeLabel: {
+          field: null, size: 20, visible: false
+        },
+        edgeColor: {
+          field: null, rangePreset: 'monogray',
+          scale: 'linear', domain: [0, 1]
+        },
+        edgeWidth: {
+          field: null, rangePreset: 'medium',
+          scale: 'linear', domain: [0.5, 1]
+        },
+        edgeLabel: {
+          field: null, size: 12, visible: false
+        }
+      };
+    }
+
+    takeSnapshot() {
+      // TODO: save coords
+      return {
+        name: this.name,
+        filters: this.filters,
+        positions: this.positions,
+        config: this.config,
+        appearance: this.appearance
       }
-      this.ns = JSON.parse(JSON.stringify(this.nodes.records()));
-      this.ns.forEach(n => { n.adjacency = []; });
-      this.es = JSON.parse(JSON.stringify(this.edges.records()));
-      this.es.forEach((e, i) => {
-        e.num = i;  // e.index will be overwritten by d3-force
-        this.ns[e.source].adjacency.push([e.target, i]);
-        this.ns[e.target].adjacency.push([e.source, i]);
+    }
+
+    /**
+     * update this.nodes and this.edges used by d3.force
+     */
+    updateFilter() {
+      // TODO: apply filters
+      /*
+      this.snapshot.filters.forEach(filter => {
+        const component = filter.type == "edge" ? this.session.edges : this.session.nodes;
+        const workingCopy = filter.type == "edge" ? this.edges : this.nodes;
+        component.filter(e => {
+          if (filter.scale == "nominal") {
+            filter.key
+          } else {
+
+          }
+        });
       });
-      if (this.coords) {
-        this.setAllCoords(this.coords);
-      }
+      */
+      this.fnodes = this.nodes;
+      this.fedges = this.edges;
+      // update adjacency
+      this.adjacency.splice(0);
+      this.nodes.forEach(e => {
+        this.adjacency.push([]);
+      });
+      this.fedges.forEach(e => {
+        this.adjacency[e.__source].push([e.__target, e]);
+        this.adjacency[e.__target].push([e.__source, e]);
+      });
+      // this.setAllCoords(this.coords);
     }
 
     setBoundary() {
-      const xs = this.ns.map(e => e.x);
-      const ys = this.ns.map(e => e.y);
+      const xs = [];
+      const ys = [];
+      this.fnodes.forEach(e => {
+        xs.push(e.x);
+        ys.push(e.y);
+      });
       this.boundary.top = Math.min.apply(null, ys);
       this.boundary.left = Math.min.apply(null, xs);
       this.boundary.bottom = Math.max.apply(null, ys);
@@ -2382,901 +1667,33 @@ var app = (function (d3, _) {
     }
 
     setCoords(n, x, y) {
-      this.ns[n].x = x;
-      this.ns[n].y = y;
-      this.ns[n].adjacency.forEach(e => {
+      this.nodes[n].x = x;
+      this.nodes[n].y = y;
+      this.nodes[n].adjacency.forEach(e => {
         const nbr = e[0];
         const edge = e[1];
         if (n < nbr) {
-          this.es[edge].sx = x;
-          this.es[edge].sy = y;
+          this.edges[edge].sx = x;
+          this.edges[edge].sy = y;
         } else {
-          this.es[edge].tx = x;
-          this.es[edge].ty = y;
+          this.edges[edge].tx = x;
+          this.edges[edge].ty = y;
         }
       });
       this.setBoundary();
     }
 
-    nodesToRender() {
-      return this.ns.filter(
-        e => e.y > this.focusArea.top && e.x > this.focusArea.left
-          && e.y < this.focusArea.bottom && e.x < this.focusArea.right
-      );
+    updateVisibility() {
+      this.vnodes = this.fnodes; /*this.fnodes.filter(e => {
+        return e.y > this.focusArea.top && e.x > this.focusArea.left
+          && e.y < this.focusArea.bottom && e.x < this.focusArea.right;
+      });*/
+      this.vedges = this.fedges; /*this.fedges.filter(e => {
+        return this.vnodes.includes(e.__source) || this.vnodes.includes(e.__target);
+      });*/
     }
 
-    currentEdges() {
-      return this.es.filter(e => e[this.connThldField] >= this.currentConnThld);
-    }
-
-    edgesToRender() {
-      return this.currentEdges().filter(
-        e => this.focusArea.top < Math.max(e.sy, e.ty)
-          && this.focusArea.left < Math.max(e.sx, e.tx)
-          && this.focusArea.bottom > Math.min(e.sy, e.ty)
-          && this.focusArea.right > Math.min(e.sx, e.tx)
-      );
-    }
-
-    save() {
-      this.coords = this.ns.map(n => ({x: n.x, y: n.y}));
-      return idb.updateItem(this.instance, item => {
-        const ni = item.dataset
-          .findIndex(e => e.collectionID === this.nodes.collectionID);
-        item.dataset[ni] = this.nodes.export();
-        const ei = item.dataset
-          .findIndex(e => e.collectionID === this.edges.collectionID);
-        item.dataset[ei] = this.edges.export();
-        const vi = item.views
-          .findIndex(e => e.viewID === this.viewID);
-        item.views[vi] = this.export();
-      });
-    }
-
-    export() {
-      return {
-        $schema: "https://mojaie.github.io/kiwiii/specs/network_v1.0.json",
-        viewID: this.viewID,
-        name: this.name,
-        viewType: "network",
-        nodes: this.nodes.collectionID,
-        edges: this.edges.collectionID,
-        nodeColor: this.nodeColor,
-        nodeSize: this.nodeSize,
-        nodeLabel: this.nodeLabel,
-        nodeLabelColor: this.nodeLabelColor,
-        edgeColor: this.edgeColor,
-        edgeWidth: this.edgeWidth,
-        edgeLabel: this.edgeLabel,
-        edgeLabelColor: this.edgeLabelColor,
-        connThldField: this.connThldField,
-        currentConnThld: this.currentConnThld,
-        minConnThld: this.minConnThld,
-        fieldTransform: this.transform,
-        coords: this.coords
-      };
-    }
   }
-
-  /**
-   * Render select box components
-   * @param {d3.selection} selection - selection of box container (div element)
-   */
-  function selectBox(selection, label) {
-    selection
-        .classed('form-group', true)
-        .classed('form-row', true)
-        .classed('align-items-center', true);
-    selection.append('label')
-        .classed('col-form-label', true)
-        .classed('col-form-label-sm', true)
-        .classed('col-4', true)
-        .text(label);
-    selection.append('select')
-        .classed('form-control', true)
-        .classed('form-control-sm', true)
-        .classed('col-8', true)
-        .on('input', function () {
-          const valid = box.formValid(selection);
-          selection.call(box.setValidity, valid);
-        });
-  }
-
-  function updateSelectBoxOptions(selection, items) {
-    const options = selection.select('select')
-      .selectAll('option')
-        .data(items, d => d.key);
-    options.exit().remove();
-    options.enter()
-      .append('option')
-        .attr('value', d => d.key)
-        .text(d => d.name);
-  }
-
-  function selectedRecord(selection) {
-    const value = box.formValue(selection);
-    return selection.selectAll('select option').data()
-        .find(e => e.key === value);
-  }
-
-
-  /**
-   * Render select box components
-   * @param {d3.selection} selection - selection of box container (div element)
-   */
-  function checklistBox(selection, label) {
-    // TODO: scroll
-    selection
-        .classed('form-group', true)
-        .classed('form-row', true)
-        .classed('align-items-center', true);
-    const formLabel = selection.append('label')
-        .classed('col-form-label', true)
-        .classed('col-form-label-sm', true)
-        .classed('col-4', true)
-        .text(label);
-    formLabel.append('div')
-        .call(badge$1.invalidFeedback);
-    selection.append('ul')
-        .classed('form-control', true)
-        .classed('form-control-sm', true)
-        .classed('col-8', true);
-  }
-
-  function updateChecklistItems(selection, items) {
-    const listitems = selection.select('ul')
-      .selectAll('li')
-        .data(items, d => d.key);
-    listitems.exit().remove();
-    const form = listitems.enter()
-      .append('li')
-        .attr('class', 'form-check')
-      .append('label')
-        .attr('class', 'form-check-label');
-    form.append('input')
-        .attr('type', 'checkbox')
-        .attr('class', 'form-check-input')
-        .property('value', d => d.key);
-    form.append('span')
-        .text(d => d.name);
-  }
-
-  function checkRequired(selection) {
-    selection.selectAll('input')
-        .on('change', function () {
-          const valid = anyChecked(selection);
-          selection.call(setChecklistValidity, valid);
-        });
-  }
-
-  function updateChecklistValues(selection, values) {
-    selection.selectAll('input')
-      .each(function (d) {
-        d3__default["default"].select(this).property('checked', values.includes(d.key));
-      });
-    selection.call(setChecklistValidity, true);  // Clear validity state
-  }
-
-  function checklistValues(selection) {
-    return selection.selectAll('input:checked').data().map(d => d.key);
-  }
-
-  function anyChecked(selection) {
-    return checklistValues(selection).length > 0;
-  }
-
-  function setChecklistValidity(selection, valid) {
-    selection.select('.invalid-feedback')
-        .style('display', valid ? 'none': 'inherit');
-    selection.select('.form-control')
-        .style('background-color', valid ? null : 'LightPink');
-  }
-
-
-  function colorScaleBox(selection, label) {
-    selection
-        .classed('form-group', true)
-        .classed('form-row', true)
-        .classed('align-items-center', true);
-    selection.append('label')
-        .classed('col-form-label', true)
-        .classed('col-form-label-sm', true)
-        .classed('col-4', true)
-        .text(label || 'Colorscale');
-    const form = selection.append('div')
-        .classed('form-control', true)
-        .classed('form-control-sm', true)
-        .classed('col-8', true);
-    const dropdown = form.append('div')
-        .classed('btn-group', true)
-        .classed('mr-1', true);
-    dropdown.append('button')
-        .classed('btn', true)
-        .classed(`btn-light`, true)
-        .classed('btn-sm', true)
-        .classed('dropdown-toggle', true)
-        .attr('data-toggle', 'dropdown');
-    dropdown.append('div')
-        .classed('dropdown-menu', true)
-        .classed('py-0', true);
-    form.append('span')
-        .classed('selected', true);
-  }
-
-  function colorScaleBoxItems(selection, items) {
-    const listitems = selection.select('.dropdown-menu')
-      .selectAll('a')
-        .data(items, d => d);
-    listitems.exit().remove();
-    listitems.enter()
-      .append('a')
-        .classed('dropdown-item', true)
-        .classed('py-0', true)
-        .attr('href', '#')
-        .attr('title', d => d.key)
-        .on('click', function (d) {
-          selection.call(setSelectedColorScale, d);
-          selection.dispatch('change', {bubbles: true});
-        })
-      .append('svg')
-        .each(function (d) {
-          d3__default["default"].select(this)
-            .attr('viewBox', '0 0 100 10')
-            .attr('preserveAspectRatio', 'none')
-            .call(shape.colorBar[d.type], d.colors, d.text)
-            .call(shape.setSize, 100, 10);
-        });
-  }
-
-  function setSelectedColorScale(selection, item) {
-    const selected = selection.select('.selected');
-    selected.selectAll('svg').remove();
-    selected.datum(item);  // Bind selected item record
-    selected.append('svg')
-        .attr('viewBox', '0 0 100 10')
-        .attr('preserveAspectRatio', 'none')
-        .call(shape.colorBar[item.type], item.colors, item.text)
-        .call(shape.setSize, 100, 10);
-  }
-
-  function updateColorScaleBox(selection, key) {
-    const data = selection.select('.dropdown-menu')
-      .selectAll('a').data();
-    const item = data.find(e => e.key === key);
-    selection.call(setSelectedColorScale, item);
-  }
-
-  function colorScaleBoxValue(selection) {
-    return selection.select('.selected').datum().key;
-  }
-
-  function colorScaleBoxItem(selection) {
-    return selection.select('.selected').datum();
-  }
-
-
-  var lbox = {
-    selectBox, updateSelectBoxOptions, selectedRecord,
-    checklistBox, updateChecklistItems, checkRequired, updateChecklistValues,
-    checklistValues, anyChecked, setChecklistValidity,
-    colorScaleBox, colorScaleBoxItems, updateColorScaleBox,
-    colorScaleBoxValue, colorScaleBoxItem
-  };
-
-  /**
-   * Render range box components
-   * @param {d3.selection} selection - selection of box container (div element)
-   */
-  function rangeBox(selection, label) {
-    selection
-        .classed('form-row', true)
-        .classed('form-group', true)
-        .classed('align-items-center', true)
-      .append('div')
-        .classed('col-form-label', true)
-        .classed('col-form-label-sm', true)
-        .text(label);
-
-    const minBox = selection.append('div');
-    minBox.append('label').text('min');
-    minBox.append('input').classed('min', true);
-
-    const maxBox = selection.append('div');
-    maxBox.append('label').text('max');
-    maxBox.append('input').classed('max', true);
-
-    selection.selectAll('div')
-        .classed('form-group', true)
-        .classed('col-4', true)
-        .classed('mb-0', true);
-
-    selection.selectAll('label')
-        .classed('col-form-label', true)
-        .classed('col-form-label-sm', true)
-        .classed('py-0', true);
-
-    selection.selectAll('input')
-        .classed('form-control', true)
-        .classed('form-control-sm', true)
-        .attr('type', 'number');
-
-    selection.append('div')
-        .classed('col-4', true);
-    selection.append('div')
-        .call(badge$1.invalidFeedback)
-        .classed('col-8', true);
-  }
-
-
-  function linearRange(selection, min, max, step) {
-    selection.selectAll('.min, .max')
-        .attr('min', min || null)
-        .attr('max', max || null)
-        .attr('step', step || null)
-        .attr('required', 'required')
-        .on('input', function () {
-          const valid = linearValid(this, step);
-          d3__default["default"].select(this)
-            .style('background-color', valid ? null : '#ffcccc');
-          selection.select('.invalid-feedback')
-            .style('display', linearRangeValid(selection) ? 'none': 'inherit');
-        })
-        .dispatch('input');
-  }
-
-
-  function logRange(selection) {
-    selection.selectAll('.min, .max')
-        .attr('required', 'required')
-        .on('input', function () {
-          const valid = logValid(this);
-          d3__default["default"].select(this)
-            .style('background-color', valid ? null : '#ffcccc');
-          selection.select('.invalid-feedback')
-            .style('display', logRangeValid(selection) ? 'none': 'inherit');
-        })
-        .dispatch('input');
-  }
-
-
-  function updateRangeValues(selection, range) {
-    selection.select('.min').property('value', range[0]);
-    selection.select('.max').property('value', range[1]);
-    selection.selectAll('.min,.max')
-        .dispatch('input', {bubbles: true});
-  }
-
-
-  function linearValid(node, step) {
-    // If step is not specified, accept stepMismatch
-    const stepm = step ? false : node.validity.stepMismatch;
-    return  node.checkValidity() || stepm;
-  }
-
-
-  function linearRangeValid(selection) {
-    const step = selection.select('.min').attr('step');
-    const minValid = linearValid(selection.select('.min').node(), step);
-    const maxValid = linearValid(selection.select('.max').node(), step);
-    return minValid && maxValid;
-  }
-
-
-  function logValid(node) {
-    // Accept stepMismatch
-    const stepm = node.validity.stepMismatch;
-    return (node.checkValidity() || stepm) && node.value > 0;
-  }
-
-
-  function logRangeValid(selection) {
-    const minPos = logValid(selection.select('.min').node());
-    const maxPos = logValid(selection.select('.max').node());
-    return linearRangeValid(selection) && minPos && maxPos;
-  }
-
-
-  function rangeValues(selection) {
-    return [
-      selection.select('.min').property('value'),
-      selection.select('.max').property('value')
-    ];
-  }
-
-
-  /**
-   * Render color scale box components
-   * @param {d3.selection} selection - selection of box container (div element)
-   */
-  function colorRangeBox(selection, label) {
-    selection
-        .classed('form-row', true)
-        .classed('form-group', true)
-        .classed('align-items-center', true);
-    selection.append('div')
-        .classed('col-form-label', true)
-        .classed('col-form-label-sm', true)
-        .text(label);
-
-    const minBox = selection.append('div');
-    minBox.append('label').text('min');
-    minBox.append('input').classed('min', true);
-
-    const midBox = selection.append('div');
-    midBox.append('label').text('mid');
-    midBox.append('input').classed('mid', true);
-
-    const maxBox = selection.append('div');
-    maxBox.append('label').text('max');
-    maxBox.append('input').classed('max', true);
-
-    selection.on('change', () => {
-      // avoid update by mousemove on the colorpicker
-      d3__default["default"].event.stopPropagation();
-    });
-
-    selection.selectAll('div')
-        .classed('form-group', true)
-        .classed('col-3', true)
-        .classed('mb-0', true);
-
-    selection.selectAll('label')
-        .classed('col-form-label', true)
-        .classed('col-form-label-sm', true)
-        .classed('py-0', true);
-
-    selection.selectAll('input')
-        .classed('form-control', true)
-        .classed('form-control-sm', true)
-        .attr('type', 'color');
-  }
-
-
-  function updateColorRangeValues(selection, range) {
-    selection.select('.min').property('value', range[0]);
-    selection.select('.mid').property('value', range[1]);
-    selection.select('.max').property('value', range[2]);
-  }
-
-
-  function colorRangeValues(selection) {
-    return [
-      selection.select('.min').property('value'),
-      selection.select('.mid').property('value'),
-      selection.select('.max').property('value')
-    ];
-  }
-
-
-  var rbox = {
-    rangeBox, linearRange, logRange, updateRangeValues,
-    rangeValues, linearRangeValid, logRangeValid,
-    colorRangeBox, updateColorRangeValues, colorRangeValues
-  };
-
-  function dropdownFormGroup(selection, label) {
-    const id = misc.uuidv4().slice(0, 8);
-    selection.classed('mb-3', true)
-      .append('div')
-        .classed('form-group', true)
-        .classed('form-row', true)
-        .classed('justify-content-end', true)
-      .append('button')
-        .classed('btn', true)
-        .classed('btn-sm', true)
-        .classed('btn-outline-primary', true)
-        .classed('dropdown-toggle', true)
-        .attr('data-toggle', 'collapse')
-        .attr('data-target', `#${id}-collapse`)
-        .attr('aria-expanded', 'false')
-        .attr('aria-controls', `${id}-collapse`)
-        .text(label);
-    selection.append('div')
-        .classed('collapse', true)
-        .attr('id', `${id}-collapse`)
-      .append('div')
-        .classed('card', true)
-        .classed('card-body', true);
-  }
-
-
-  var dropdown = {
-    dropdownFormGroup
-  };
-
-  /**
-   * Render color range control box group
-   * @param {d3.selection} selection - selection of box container (div element)
-   */
-  function colorRangeGroup(selection, colorScales) {
-    selection
-        .classed('mb-3', true);
-    selection.append('div')
-        .classed('colorscale', true)
-        .classed('mb-2', true)
-        .call(lbox.colorScaleBox, 'Colorscale')
-        .call(lbox.colorScaleBoxItems, colorScales);
-
-    // Custom colorscale
-    const collapse = selection.append('div')
-        .call(dropdown.dropdownFormGroup, 'Custom color')
-      .select('.card-body')
-        .classed('p-2', true);
-
-    const customColorRanges = [
-      {key: 'continuous', name: 'Continuous'},
-      {key: 'two-piece', name: 'Two-piece'}
-    ];
-    collapse.append('div')
-        .classed('rangetype', true)
-        .classed('mb-1', true)
-        .call(lbox.selectBox, 'Range type')
-        .call(lbox.updateSelectBoxOptions, customColorRanges);
-    collapse.append('div')
-        .classed('range', true)
-        .classed('mb-1', true)
-        .call(rbox.colorRangeBox, 'Range');
-    collapse.append('div')
-        .classed('unknown', true)
-        .classed('mb-1', true)
-        .call(box.colorBox, 'Unknown');
-  }
-
-
-  function updateColorRangeGroup(selection, cscale, range, unknown) {
-    const customRange = () => {
-      const cs = lbox.colorScaleBoxValue(selection.select('.colorscale'));
-      const rg = box.formValue(selection.select('.rangetype'));
-      const customScale = cs === 'custom';
-      selection.selectAll('.rangetype, .range, .unknown')
-          .selectAll('select, input')
-          .property('disabled', !customScale);
-      selection.select('.range').select('.mid')
-          .property('disabled', !customScale || rg === 'continuous');
-    };
-    selection.select('.colorscale')
-        .call(lbox.updateColorScaleBox, cscale)
-        .on('change', function () {
-          customRange();
-        });
-    const rtype = range.length === 2 ? 'continuous' : 'two-piece';
-    selection.select('.rangetype')
-        .call(box.updateFormValue, rtype)
-        .on('change', function () {
-          customRange();
-        })
-        .dispatch('change');
-    const rboxValues = range.length === 2  ? [range[0], null, range[1]] : range;
-    selection.select('.range')
-        .call(rbox.updateColorRangeValues, rboxValues)
-        .on('focusin', () => {
-          selection.dispatch('change', {bubbles: true});
-        });
-    selection.select('.unknown')
-        .call(box.updateFormValue, unknown)
-        .on('focusin', () => {
-          selection.dispatch('change', {bubbles: true});
-        });
-  }
-
-
-  function colorGroupValues(selection) {
-    const colorScale = lbox.colorScaleBoxItem(selection.select('.colorscale'));
-    const rtype = box.formValue(selection.select('.rangetype'));
-    const range = rbox.colorRangeValues(selection.select('.range'));
-    const unknown = box.formValue(selection.select('.unknown'));
-    return {
-      color: colorScale.key,
-      colorScaleType: colorScale.type,
-      range: rtype === 'continuous' ? [range[0], range[2]] : range,
-      unknown: unknown
-    };
-  }
-
-
-  /**
-   * Render scale and domain control box group
-   * @param {d3.selection} selection - selection of box container (div element)
-   */
-  function scaleBoxGroup(selection) {
-    selection.classed('mb-3', true);
-
-    // Scale type
-    const scaleOptions = [
-      {key: 'linear', name: 'Linear'},
-      {key: 'log', name: 'Log'}
-    ];
-    selection.append('div')
-        .classed('scale', true)
-        .classed('mb-1', true)
-        .call(lbox.selectBox, 'Scale')
-        .call(lbox.updateSelectBoxOptions, scaleOptions)
-        .on('change', function () {
-          const isLog = box.formValue(d3__default["default"].select(this)) === 'log';
-          selection.select('.domain')
-            .call(isLog ? rbox.logRange : rbox.linearRange)
-            .call(badge$1.updateInvalidMessage,
-                  isLog ? 'Please provide a valid range (larger than 0)'
-                  : 'Please provide a valid number');
-        });
-    selection.append('div')
-        .classed('domain', true)
-        .classed('mb-1', true)
-        .call(rbox.rangeBox, 'Domain');
-  }
-
-
-  function updateScaleBoxGroup(selection, scale, domain) {
-    selection.select('.scale')
-        .call(box.updateFormValue, scale)
-        .dispatch('change');
-    selection.select('.domain')
-        .call(rbox.updateRangeValues, domain);
-  }
-
-
-  function scaleBoxGroupValid(selection) {
-    const isLog = box.formValue(selection.select('.scale')) === 'log';
-    const dm = selection.select('.domain');
-    return isLog ? rbox.logRangeValid(dm) : rbox.linearRangeValid(dm);
-  }
-
-
-  function scaleGroupValues(selection) {
-    const scale = box.formValue(selection.select('.scale'));
-    const domain = rbox.rangeValues(selection.select('.domain'));
-    return {
-      scale: scale || 'linear',
-      domain: domain
-    };
-  }
-
-
-  var group = {
-    colorRangeGroup, updateColorRangeGroup, colorGroupValues,
-    scaleBoxGroup, updateScaleBoxGroup, scaleGroupValues, scaleBoxGroupValid
-  };
-
-  function colorControlBox(selection, colorScales, fieldName) {
-    // Color field
-    selection.append('div')
-        .classed('field', true)
-        .call(lbox.selectBox, fieldName || 'Field');
-
-    // Colorscale and custom range
-    selection.append('div')
-        .classed('range', true)
-        .call(group.colorRangeGroup, colorScales)
-        .on('change', function () {
-          const values = group.colorGroupValues(d3__default["default"].select(this));
-          const noScale = ['categorical', 'monocolor']
-            .includes(values.colorScaleType);
-          selection.select('.scale').selectAll('select,input')
-              .property('disabled', noScale);
-        });
-
-    // Scale
-    selection.append('div')
-        .classed('scale', true)
-        .call(group.scaleBoxGroup);
-
-    // Legend
-    selection.append('div')
-        .classed('legend', true)
-        .call(box.checkBox, 'Show legend');
-  }
-
-
-  function updateColorControl(selection, fieldOptions, colorState) {
-    selection.select('.field')
-        .call(lbox.updateSelectBoxOptions, fieldOptions)
-        .call(box.updateFormValue, colorState.field);
-    selection.select('.range')
-        .call(group.updateColorRangeGroup, colorState.color,
-              colorState.range, colorState.unknown);
-    selection.select('.scale')
-        .call(group.updateScaleBoxGroup, colorState.scale, colorState.domain)
-        .dispatch('change');
-    selection.select('.legend')
-        .call(box.updateCheckBox, colorState.legend);
-  }
-
-
-  function colorControlValid(selection) {
-    return group.scaleBoxGroupValid(selection.select('.scale'));
-  }
-
-
-  function colorControlState(selection) {
-    const range = group.colorGroupValues(selection.select('.range'));
-    const scale = group.scaleGroupValues(selection.select('.scale'));
-    return {
-      field: box.formValue(selection.select('.field')),
-      color: range.color,
-      range: range.range,
-      unknown: range.unknown,
-      scale: range.colorScaleType === 'categorical' ? 'ordinal': scale.scale,
-      domain: scale.domain,
-      legend: box.checkBoxValue(selection.select('.legend'))
-    };
-  }
-
-
-  function sizeControlBox(selection, fieldName) {
-    // Size field
-    selection.append('div')
-        .classed('field', true)
-        .call(lbox.selectBox, fieldName || 'Field');
-
-    // Size range
-    selection.append('div')
-        .classed('range', true)
-        .classed('mb-2', true)
-        .call(rbox.rangeBox, 'Range')
-        .call(rbox.linearRange, 0.1, 999, 0.1)
-        .call(badge$1.updateInvalidMessage,
-              'Please provide a valid range (0.1-999)');
-
-    // Size unknown
-    selection.append('div')
-        .classed('unknown', true)
-        .call(box.numberBox, 'Unknown')
-        .call(box.updateNumberRange, 0.1, 999, 0.1)
-        .call(badge$1.updateInvalidMessage,
-              'Please provide a valid number (0.1-999)')
-      .select('input')
-        .classed('col-8', false)
-        .classed('col-3', true);
-
-    // Size scale
-    selection.append('div')
-        .classed('scale', true)
-        .call(group.scaleBoxGroup);
-  }
-
-
-  function updateSizeControl(selection, fieldOptions, sizeState) {
-    selection.select('.field')
-        .call(lbox.updateSelectBoxOptions, fieldOptions)
-        .call(box.updateFormValue, sizeState.field);
-    selection.select('.range')
-        .call(rbox.updateRangeValues, sizeState.range);
-    selection.select('.unknown')
-        .call(box.updateFormValue, sizeState.unknown);
-    selection.select('.scale')
-        .call(group.updateScaleBoxGroup, sizeState.scale, sizeState.domain);
-  }
-
-
-  function sizeControlValid(selection) {
-    const rangeValid = rbox.linearRangeValid(selection.select('.range'));
-    const unkValid = box.formValid(selection.select('.unknown'));
-    const scaleValid = group.scaleBoxGroupValid(selection.select('.scale'));
-    return rangeValid && unkValid && scaleValid;
-  }
-
-
-  function sizeControlState(selection) {
-    const scale = group.scaleGroupValues(selection.select('.scale'));
-    return {
-      field: box.formValue(selection.select('.field')),
-      range: rbox.rangeValues(selection.select('.range')),
-      unknown: box.formValue(selection.select('.unknown')),
-      scale: scale.scale,
-      domain: scale.domain
-    };
-  }
-
-
-  function labelControlBox(selection, colorScales) {
-    // nodeLabel.visible
-    selection.append('div')
-      .append('div')
-        .classed('visible', true)
-        .call(box.checkBox, 'Show labels');
-
-    // nodeLabel
-    const labelGroup = selection.append('div')
-        .classed('mb-3', true);
-    labelGroup.append('div')
-        .classed('text', true)
-        .classed('mb-1', true)
-        .call(lbox.selectBox, 'Text field');
-    labelGroup.append('div')
-        .classed('size', true)
-        .classed('mb-1', true)
-        .call(box.numberBox, 'Font size')
-        .call(box.updateNumberRange, 0.1, 999, 0.1)
-        .call(badge$1.updateInvalidMessage,
-              'Please provide a valid number (0.1-999)')
-      .select('.form-control')
-        .attr('required', 'required');
-
-    // nodeLabelColor
-    selection.call(colorControlBox, colorScales, 'Color field');
-    // TODO: not implemented yet
-    selection.select('.legend input').property('disabled', true);
-  }
-
-
-  function updateLabelControl(selection, fieldOptions,
-                                 labelState, colorState) {
-    selection.select('.visible')
-        .call(box.updateCheckBox, labelState.visible);
-    selection.select('.text')
-        .call(lbox.updateSelectBoxOptions, fieldOptions)
-        .call(box.updateFormValue, labelState.field);
-    selection.select('.size')
-        .call(box.updateFormValue, labelState.size);
-    selection.call(updateColorControl, fieldOptions, colorState);
-  }
-
-
-  function labelControlValid(selection) {
-    const fontValid = box.formValid(selection.select('.size'));
-    return fontValid && colorControlValid(selection);
-  }
-
-
-  function labelControlState(selection) {
-    return {
-      label: {
-        field: box.formValue(selection.select('.text')),
-        size: box.formValue(selection.select('.size')),
-        visible: box.checkBoxValue(selection.select('.visible'))
-      },
-      labelColor: colorControlState(selection)
-    };
-  }
-
-
-  function controlBoxFrame(selection, navID, contentID) {
-    selection.append('nav')
-      .append('div')
-        .classed('nav', true)
-        .classed('nav-tabs', true)
-        .attr('id', navID)
-        .attr('role', 'tablist');
-    selection.append('div')
-        .classed('tab-content', true)
-        .classed('p-2', true)
-        .attr('id', contentID);
-  }
-
-
-  function controlBoxNav(selection, id, label) {
-    selection
-        .classed('nav-item', true)
-        .classed('nav-link', true)
-        .classed('py-1', true)
-        .attr('id', `${id}-tab`)
-        .attr('data-toggle', 'tab')
-        .attr('href', `#${id}`)
-        .attr('role', 'tab')
-        .attr('aria-controls', id)
-        .attr('aria-selected', 'false')
-        .text(label);
-  }
-
-
-  function controlBoxItem(selection, id) {
-    selection
-        .classed('tab-pane', true)
-        .classed('fade', true)
-        .classed('container', true)
-        .classed('px-0', true)
-        .attr('id', id)
-        .attr('role', 'tabpanel')
-        .attr('aria-labelledby', `${id}-tab`);
-  }
-
-
-  var cbox = {
-    colorControlBox, updateColorControl, colorControlValid, colorControlState,
-    sizeControlBox, updateSizeControl, sizeControlValid, sizeControlState,
-    labelControlBox, updateLabelControl, labelControlValid, labelControlState,
-    controlBoxFrame, controlBoxNav, controlBoxItem
-  };
 
   const svgWidth = 180;  //TODO
   const svgHeight = 180;  //TODO
@@ -3284,7 +1701,7 @@ var app = (function (d3, _) {
 
   function updateNodes(selection, records, showStruct) {
     const nodes = selection.selectAll('.node')
-      .data(records, d => d.index);
+      .data(records, d => d.__index);
     nodes.exit().remove();
     const entered = nodes.enter()
       .append('g')
@@ -3295,10 +1712,6 @@ var app = (function (d3, _) {
     entered.append('g')
         .attr('class', 'node-content')
         .attr('transform', `translate(${-svgWidth / 2},${-svgHeight / 2})`);
-    entered.append('text')
-        .attr('class', 'node-label')
-        .attr('x', 0)
-        .attr('text-anchor', 'middle');
     entered.append('foreignObject')
         .attr('class', 'node-html')
       .append('xhtml:div');
@@ -3313,7 +1726,7 @@ var app = (function (d3, _) {
 
   function updateEdges(selection, records) {
     const edges = selection.selectAll('.link')
-      .data(records, d => `${d.source.index}_${d.target.index}`);
+      .data(records, d => d.__index);
     edges.exit().remove();
     const entered = edges.enter()
       .append('g')
@@ -3330,66 +1743,52 @@ var app = (function (d3, _) {
 
 
   function updateNodeAttrs(selection, state) {
-    const colorConv = cscale.scaleFunction(state.nodeColor);
-    const sizeConv = cscale.scaleFunction(state.nodeSize);
-    const labelColorConv = cscale.scaleFunction(state.nodeLabelColor);
-    const field = state.nodes.fields
-      .find(e => e.key === state.nodeLabel.field);
-    const textConv = value => {
-      return field.format === 'd3_format'
-        ? misc.formatNum(value, field.d3_format) : value;
+    const colorScaleFunc = cscale.scaleFunction(state.appearance.nodeColor, "color");
+    const sizeScaleFunc = cscale.scaleFunction(state.appearance.nodeSize, "nodeSize");
+    state.appearance.nodeLabel.field;
+    const textFormatFunc = value => {
+      return value
+      // return labelField.format === 'd3_format'
+      //  ? misc.formatNum(value, labelField.d3_format) : value;
     };
     selection.selectAll('.node').select('.node-symbol')
-        .attr('r', d => sizeConv(d[state.nodeSize.field]))
-        .style('fill', d => colorConv(d[state.nodeColor.field]));
+        .attr('r', d => sizeScaleFunc(d[state.appearance.nodeSize.field]))
+        .style('fill', d => colorScaleFunc(d[state.appearance.nodeColor.field]));
     // TODO: tidy up (like rowFactory?)
-    if (field.format === 'html') {
-      const htwidth = 200;
-      const fo = selection.selectAll('.node').select('.node-html');
-      fo.attr('x', -htwidth / 2)
-        .attr('y', d => state.focusedView ? svgWidth / 2 - 10
-          : parseFloat(sizeConv(d[state.nodeSize.field])))
-        .attr('width', htwidth)
-        .attr('height', 1)
-        .attr('overflow', 'visible');
-      fo.select('div')
-        .style('font-size', `${state.nodeLabel.size}px`)
-        .style('color', d => labelColorConv(d[state.nodeLabelColor.field]))
-        .style('text-align', 'center')
-        .style('display', state.nodeLabel.visible ? 'block' : 'none')
-        .html(d => d[state.nodeLabel.field]);
-      selection.selectAll('.node').select('.node-label').text('');
-    } else {
-      selection.selectAll('.node').select('.node-label')
-          .attr('font-size', state.nodeLabel.size)
-          .attr('y', d => state.focusedView ? svgWidth / 2 - 10
-            : parseFloat(sizeConv(d[state.nodeSize.field])))
-          .attr('visibility', state.nodeLabel.visible ? 'inherit' : 'hidden')
-          .style('fill', d => labelColorConv(d[state.nodeLabelColor.field]))
-          .text(d => textConv(d[state.nodeLabel.field]));
-      selection.selectAll('.node').select('.node-html div').html('');
-    }
+    const htwidth = 200;
+    const fo = selection.selectAll('.node').select('.node-html');
+    fo.attr('x', -htwidth / 2)
+      .attr('y', d => state.showNodeImage ? svgWidth / 2 - 10
+        : parseFloat(sizeScaleFunc(d[state.appearance.nodeSize.field])))
+      .attr('width', htwidth)
+      .attr('height', 1)
+      .attr('overflow', 'visible');
+    fo.select('div')
+      .style('font-size', `${state.appearance.nodeLabel.size}px`)
+      .style('color', d => d.labelColor || "#cccccc")
+      .style('text-align', 'center')
+      .style('display', state.appearance.nodeLabel.visible ? 'block' : 'none')
+      .html(d => textFormatFunc(d[state.appearance.nodeLabel.field]));
   }
 
 
   function updateEdgeAttrs(selection, state) {
-    const colorConv = cscale.scaleFunction(state.edgeColor);
-    const widthConv = cscale.scaleFunction(state.edgeWidth);
-    const labelColorConv = cscale.scaleFunction(state.edgeLabelColor);
-    const field = state.edges.fields
-      .find(e => e.key === state.edgeLabel.field);
-    const textConv = value => {
-      return field.format === 'd3_format'
-        ? misc.formatNum(value, field.d3_format) : value;
+    const colorScaleFunc = cscale.scaleFunction(state.appearance.edgeColor, "color");
+    const widthScaleFunc = cscale.scaleFunction(state.appearance.edgeWidth, "edgeWidth");
+    state.appearance.edgeLabel.field;
+    const textFormatFunc = value => {
+      return value
+      //return labelField.format === 'd3_format'
+      //  ? misc.formatNum(value, labelField.d3_format) : value;
     };
     selection.selectAll('.link').select('.edge-line')
-      .style('stroke', d => colorConv(d[state.edgeColor.field]))
-      .style('stroke-width', d => widthConv(d[state.edgeWidth.field]));
+      .style('stroke', d => colorScaleFunc(d[state.appearance.edgeColor.field]))
+      .style('stroke-width', d => widthScaleFunc(d[state.appearance.edgeWidth.field]));
     selection.selectAll('.link').select('.edge-label')
-      .attr('font-size', state.edgeLabel.size)
-      .attr('visibility', state.edgeLabel.visible ? 'inherit' : 'hidden')
-      .style('fill', d => labelColorConv(d[state.edgeLabelColor.field]))
-      .text(d => textConv(d[state.edgeLabel.field]));
+      .attr('font-size', state.appearance.edgeLabel.size)
+      .attr('visibility', state.appearance.edgeLabel.visible ? 'inherit' : 'hidden')
+      .style('fill', d => d.labelColor || "#cccccc")
+      .text(d => textFormatFunc(d[state.appearance.edgeLabel.field]));
   }
 
 
@@ -3399,17 +1798,23 @@ var app = (function (d3, _) {
 
 
   function updateEdgeCoords(selection) {
-    selection.attr('transform', d => `translate(${d.sx}, ${d.sy})`);
+    selection.attr('transform', d => `translate(${d.source.x}, ${d.source.y})`);
     selection.select('.edge-line')
       .attr('x1', 0)
       .attr('y1', 0)
-      .attr('x2', d => d.tx - d.sx)
-      .attr('y2', d => d.ty - d.sy);
+      .attr('x2', d => d.target.x - d.source.x)
+      .attr('y2', d => d.target.y - d.source.y);
     selection.select('.edge-label')
-      .attr('x', d => (d.tx - d.sx) / 2)
-      .attr('y', d => (d.ty - d.sy) / 2);
+      .attr('x', d => (d.target.x - d.source.x) / 2)
+      .attr('y', d => (d.target.y - d.source.y) / 2);
   }
 
+  function updateNodeSelection(selection) {
+    selection.select('.node-symbol')
+      .attr('stroke', d => d.__selected ? 'red' : null)
+      .attr('stroke-width', d => d.__selected ? 10 : null)
+      .attr('stroke-opacity', d => d.__selected ? 0.5 : 0);
+  }
 
   function updateAttrs(selection, state) {
     selection.call(updateNodeAttrs, state);
@@ -3417,20 +1822,11 @@ var app = (function (d3, _) {
   }
 
 
-  function updateComponents$1(selection, state) {
-    const nodesToRender = state.nodesToRender();
-    const numNodes = nodesToRender.length;
-    if (state.enableFocusedView) {
-      state.focusedView = numNodes < state.focusedViewThreshold;
-    }
-    if (state.enableOverlookView) {
-      state.overlookView = numNodes > state.overlookViewThreshold;
-    }
-    const edgesToRender = state.overlookView ? [] : state.edgesToRender();
+  function updateComponents(selection, state) {
     selection.select('.node-layer')
-      .call(updateNodes, nodesToRender, state.focusedView);
+      .call(updateNodes, state.vnodes, false);
     selection.select('.edge-layer')
-      .call(updateEdges, edgesToRender);
+      .call(updateEdges, state.vedges);
     selection.call(updateAttrs, state);
   }
 
@@ -3453,16 +1849,16 @@ var app = (function (d3, _) {
   }
 
 
-  function move(selection, node, x, y) {
+  function move(selection, node, state, x, y) {
     const n = d3__default["default"].select(node).call(moveNode, x, y).datum();
     selection.select('.edge-layer')
       .selectAll(".link")
-      .filter(d => n.adjacency.map(e => e[1]).includes(d.num))
+      .filter(d => state.adjacency.map(e => e[1].__index).includes(d.__index))
       .each(function (d) {
-        if (n.index === d.source.index) {
-          d3__default["default"].select(this).call(moveEdge, x, y, d.tx, d.ty);
-        } else if (n.index === d.target.index) {
-          d3__default["default"].select(this).call(moveEdge, d.sx, d.sy, x, y);
+        if (n.__index === d.source.index) {
+          d3__default["default"].select(this).call(moveEdge, x, y, d.target.x, d.target.y);
+        } else if (n.__index === d.target.index) {
+          d3__default["default"].select(this).call(moveEdge, d.source.x, d.source.y, x, y);
         }
       });
   }
@@ -3478,36 +1874,37 @@ var app = (function (d3, _) {
     legendGroup.append('g')
         .classed('nodecolor', true)
         .call(legend.colorBarLegend);
-
     // Apply changes in datasets
     state.updateAllNotifier = () => {
-      state.updateWorkingCopy();
-      state.updateControlBoxNotifier();  // Update selectBox options
+      state.updateFilter();
+      state.updateVisibility();
+      //state.updateControlBoxNotifier();  // Update selectBox options
       state.setForceNotifier();
       state.updateComponentNotifier();
     };
     // Apply changes in nodes and edges displayed
     state.updateComponentNotifier = () => {
-      state.updateLegendNotifier();
-      const coords = state.ns.map(e => ({x: e.x, y: e.y}));
-      state.setAllCoords(coords);
-      selection.call(updateComponents$1, state);
+      // state.updateLegendNotifier();
+      // const coords = state.ns.map(e => ({x: e.x, y: e.y}));
+      // state.setAllCoords(coords);
+      selection.call(updateComponents, state);
       state.updateInteractionNotifier();  // Apply drag events to each nodes
     };
     state.updateNodeNotifier = () => {
-      nodes.call(updateNodes, state.nodesToRender());
-      state.updateLegendNotifier();
+      nodes.call(updateNodes, state.vnodes);
+      // state.updateLegendNotifier();
     };
     state.updateEdgeNotifier = () => {
-      edges.call(updateEdges, state.edgesToRender());
+      edges.call(updateEdges, state.vedges);
     };
     state.updateNodeAttrNotifier = () => {
       nodes.call(updateNodeAttrs, state);
-      state.updateLegendNotifier();
+      // state.updateLegendNotifier();
     };
     state.updateEdgeAttrNotifier = () => {
       edges.call(updateEdgeAttrs, state);
     };
+    /*
     state.updateLegendNotifier = () => {
       legendGroup.call(legend.updateLegendGroup,
                        state.viewBox, state.legendOrient);
@@ -3515,97 +1912,80 @@ var app = (function (d3, _) {
           .attr('visibility', state.nodeColor.legend ? 'inherit' : 'hidden')
           .call(legend.updateColorBarLegend, state.nodeColor);
     };
+    */
   }
 
 
   var component = {
     updateNodes, updateEdges, updateNodeCoords, updateEdgeCoords,
-    updateNodeAttrs, updateEdgeAttrs, updateAttrs, updateComponents: updateComponents$1,
+    updateNodeAttrs, updateEdgeAttrs, updateNodeSelection,
+    updateAttrs, updateComponents,
     move, moveEdge, networkView
   };
 
   function dragListener(selection, state) {
     return d3__default["default"].drag()
-      .on('drag', function () {
-        selection.call(component.move, this, d3__default["default"].event.x, d3__default["default"].event.y);
-      })
-      .on('end', function (d) {
-        state.setCoords(d.index, d3__default["default"].event.x, d3__default["default"].event.y);
-      });
-  }
-
-
-  function multiDragListener(selection, state) {
-    const origin = {x: 0, y: 0};
-    return d3__default["default"].drag()
-      .on('start', function () {
-        origin.x = d3__default["default"].event.x;
-        origin.y = d3__default["default"].event.y;
-      })
-      .on('drag', function () {
-        const dx = d3__default["default"].event.x - origin.x;
-        const dy = d3__default["default"].event.y - origin.y;
-        d3__default["default"].select(this).attr('transform', `translate(${dx}, ${dy})`);
-        selection.selectAll('.selected-nodes .node')
-          .each(function (n) {
-            const newX = n.x + dx;
-            const newY = n.y + dy;
-            selection.selectAll('.edge-layer .link')
-              .filter(d => n.adjacency.map(e => e[1]).includes(d.num))
-              .each(function (d) {
-                if (n.index === d.source.index) {
-                  d3__default["default"].select(this)
-                      .call(component.moveEdge, newX, newY, d.tx, d.ty);
-                } else if (n.index === d.target.index) {
-                  d3__default["default"].select(this)
-                      .call(component.moveEdge, d.sx, d.sy, newX, newY);
-                }
-              });
-          });
-      })
-      .on('end', function () {
-        const dx = d3__default["default"].event.x - origin.x;
-        const dy = d3__default["default"].event.y - origin.y;
-        selection.selectAll('.selected-nodes .node')
-          .each(function (n) {
-            const newX = n.x + dx;
-            const newY = n.y + dy;
-            state.setCoords(n.index, newX, newY);
-            d3__default["default"].select(this).attr('transform', `translate(${newX}, ${newY})`);
-          });
-        selection.selectAll('.selected-edges .link')
-            .attr('transform', d => `translate(${d.sx}, ${d.sy})`);
-        d3__default["default"].select(this).attr('transform', `translate(0, 0)`);
+      .on('drag', event => {
+        if (event.subject.__selected) {
+          // multi selected node
+          selection.selectAll(".node")
+            .filter(d => d.__selected)
+            .each(d => {  // TODO: d.x += dx can work?
+              d.x += event.dx;
+              d.y += event.dy;
+            });
+          selection.selectAll(".node")
+            .filter(d => d.__selected)
+            .call(component.updateNodeCoords);
+          selection.selectAll(".link")
+            .filter(d => d.source.__selected || d.target.__selected)
+            .call(component.updateEdgeCoords);
+        } else {
+          // single node
+          event.subject.x = event.x;
+          event.subject.y = event.y;
+          const n = event.subject.__index;
+          d3__default["default"].selectAll(".node")
+            .filter(d => d.__index == n)
+            .call(component.updateNodeCoords);
+          selection.selectAll(".link")
+            .filter(d => d.source.__index == n || d.target.__index == n)
+            .call(component.updateEdgeCoords);
+        }
       });
   }
 
 
   function zoomListener(selection, state) {
-    let prevTransform = {x: 0, y: 0, k: 1};
+    const p = {x: 0, y: 0, k: 1};  // previous transform
     selection
-        .on("dblclick.zoom", null)  // disable double-click zoom
-        .on('.drag', null);  // disable rectSelect
+      .on("dblclick.zoom", null)  // disable double-click zoom
+      .on('.drag', null);  // disable rectSelect
     return d3__default["default"].zoom()
-      .on('zoom', function() {
-        const t = d3__default["default"].event.transform;
+      .on('zoom', event => {
+        const t = event.transform;
         selection.call(transform$1.transform, t.x, t.y, t.k);
-        // Smooth transition
-        if (!state.focusedView) {
-          const p = prevTransform;
+        // Smooth transition (continuously update components on zoom out)
+        // only work for showNodeImage=false due to performance reason
+        if (!state.showNodeImage) {
           const xMoved = t.x > p.x + 20 || t.x < p.x - 20;
           const yMoved = t.y > p.y + 20 || t.y < p.y - 20;
           const zoomIn = t.k > p.k;
           if (xMoved || yMoved && !zoomIn) {
             state.setTransform(t.x, t.y, t.k);
-            prevTransform = {x: t.x, y: t.y, k: t.k};
+            p.x = t.x;
+            p.y = t.y;
+            p.k = t.k;
             state.updateComponentNotifier();
           }
         }
       })
-      .on('end', function() {
-        const t = d3__default["default"].event.transform;
+      .on('end', event => {
+        const t = event.transform;
         state.setTransform(t.x, t.y, t.k);
-        prevTransform = {x: t.x, y: t.y, k: t.k};
+        p.x = t.x;
+        p.y = t.y;
+        p.k = t.k;
         state.updateComponentNotifier();
       });
   }
@@ -3615,59 +1995,46 @@ var app = (function (d3, _) {
     selection.on('.zoom', null);  // disable zoom
     const rect = selection.select('.interactions .rect-select');
     const origin = {x: 0, y: 0};
-    let initSel = [];
+    const p = new Set();  // previous selection
+    selection.selectAll('.node')
+      .each(d => {
+        if (d.__selected) { p.add(d.__index); }
+      });
     return d3__default["default"].drag()
-      .on('start', function () {
-        origin.x = d3__default["default"].event.x;
-        origin.y = d3__default["default"].event.y;
-        initSel = state.ns.map(e => e.selected);
+      .on('start', event => {
+        origin.x = event.x;
+        origin.y = event.y;
         rect.attr('visibility', 'visible')
             .attr('x', origin.x).attr('y', origin.y);
       })
-      .on('drag', function () {
-        const left = Math.min(origin.x, d3__default["default"].event.x);
-        const width = Math.abs(origin.x - d3__default["default"].event.x);
-        const top = Math.min(origin.y, d3__default["default"].event.y);
-        const height = Math.abs(origin.y - d3__default["default"].event.y);
+      .on('drag', event => {
+        const left = Math.min(origin.x, event.x);
+        const width = Math.abs(origin.x - event.x);
+        const top = Math.min(origin.y, event.y);
+        const height = Math.abs(origin.y - event.y);
+        rect.attr('x', left).attr('y', top)
+          .attr('width', width).attr('height', height);
         const tf = state.transform;
         const xConv = x => (x - tf.x) / tf.k;
         const yConv = y => (y - tf.y) / tf.k;
+        const l = xConv(left);
+        const t = yConv(top);
+        const r = xConv(left + width);
+        const b = yConv(top + height);
         selection.selectAll('.node')
           .each(function(d) {
-            const selected = d3__default["default"].select(this.parentNode).classed('selected-nodes');
-            const inside = d.x > xConv(left) && d.y > yConv(top)
-                && d.x < xConv(left + width) && d.y < yConv(top + height);
-            const sel = selected !== inside;
-            d3__default["default"].select(this)
-              .select('.node-symbol')
-                .attr('stroke', sel ? 'red' : null)
-                .attr('stroke-width', sel ? 10 : null)
-                .attr('stroke-opacity', sel ? 0.5 : 0);
-          rect.attr('x', left).attr('y', top)
-              .attr('width', width).attr('height', height);
-
-        });
+            const inside = d.x > l && d.y > t && d.x < r && d.y < b;
+            state.nodes[d.__index].__selected = p.has(d.__index) !== inside;
+          });
+        selection.selectAll(".node")
+          .call(component.updateNodeSelection);
       })
       .on('end', function () {
-        const left = Math.min(origin.x, d3__default["default"].event.x);
-        const width = Math.abs(origin.x - d3__default["default"].event.x);
-        const top = Math.min(origin.y, d3__default["default"].event.y);
-        const height = Math.abs(origin.y - d3__default["default"].event.y);
-        const tf = state.transform;
-        const xConv = x => (x - tf.x) / tf.k;
-        const yConv = y => (y - tf.y) / tf.k;
-        state.ns.filter(
-          n => n.x > xConv(left) && n.y > yConv(top)
-            && n.x < xConv(left + width) && n.y < yConv(top + height)
-        ).forEach(n => {
-          n.selected = !initSel[n.index];
-          // Selection should be an induced subgraph of the network
-          n.adjacency.forEach(adj => {
-            state.es[adj[1]].selected = (
-              state.ns[n.index].selected && state.ns[adj[0]].selected);
+        p.clear();
+        selection.selectAll('.node')
+          .each(d => {
+            if (d.__selected) { p.add(d.__index); }
           });
-        });
-        state.updateComponentNotifier();
         rect.attr('visibility', 'hidden')
             .attr('width', 0).attr('height', 0);
       });
@@ -3675,37 +2042,33 @@ var app = (function (d3, _) {
 
 
   function selectListener(selection, state) {
-    return sel => {
-      sel.on('touchstart', function () { d3__default["default"].event.preventDefault(); })
-          .on('touchmove', function () { d3__default["default"].event.preventDefault(); })
-          .on('click.select', function () {
-            d3__default["default"].event.stopPropagation();
-            const n = d3__default["default"].select(this).datum().index;
-            const isSel = state.ns[n].selected;
-            state.ns.forEach(e => { e.selected = false; });
-            state.es.forEach(e => { e.selected = false; });
-            state.ns[n].selected = !isSel;
-            state.updateComponentNotifier();
+    return node => {
+      node.on('touchstart', event => { event.preventDefault(); })
+          .on('touchmove', event => { event.preventDefault(); })
+          .on('click.select', event => {
+            event.stopPropagation();
+            state.nodes.forEach((e, i) => {
+              state.nodes[i].__selected = false;
+            });
+            const n = d3__default["default"].select(event.currentTarget).datum().__index;
+            state.nodes[n].__selected = true;
+            selection.selectAll(".node")
+              .call(component.updateNodeSelection);
           });
     };
   }
 
 
   function multiSelectListener(selection, state) {
-    return sel => {
-      sel.on('touchstart', function () { d3__default["default"].event.preventDefault(); })
-          .on('touchmove', function () { d3__default["default"].event.preventDefault(); })
-          .on('click.select', function () {
-            d3__default["default"].event.stopPropagation();
-            const data = d3__default["default"].select(this).datum();
-            const n = data.index;
-            state.ns[n].selected = !state.ns[n].selected;
-            // Selection should be an induced subgraph of the network
-            data.adjacency.forEach(adj => {
-              state.es[adj[1]].selected = (
-                state.ns[n].selected && state.ns[adj[0]].selected);
-            });
-            state.updateComponentNotifier();
+    return node => {
+      node.on('touchstart', event => { event.preventDefault(); })
+          .on('touchmove', event => { event.preventDefault(); })
+          .on('click.select', event => {
+            event.stopPropagation();
+            const n = d3__default["default"].select(event.currentTarget).datum().__index;
+            state.nodes[n].__selected = state.nodes[n].__selected ? false : true;
+            selection.selectAll(".node")
+              .call(component.updateNodeSelection);
           });
     };
   }
@@ -3721,47 +2084,7 @@ var app = (function (d3, _) {
   }
 
 
-  // TODO: refactor
-  // Custom updater for interactive mode
-  function updateComponents(selection, state) {
-    const nodesToRender = state.nodesToRender();
-    const [nodesSelected, nodesNotSelected] = ___default["default"].partition(
-      nodesToRender, d => d.selected);
-    const numNodes = nodesToRender.length;
-    if (state.enableFocusedView) {
-      state.focusedView = numNodes < state.focusedViewThreshold;
-    }
-    if (state.enableOverlookView) {
-      state.overlookView = numNodes > state.overlookViewThreshold;
-    }
-    const edgesToRender = state.overlookView ? [] : state.edgesToRender();
-    const [edgesSelected, edgesNotSelected] = ___default["default"].partition(
-        edgesToRender, d => d.selected);
-    selection.select('.node-layer')
-        .call(component.updateNodes, nodesNotSelected, state.focusedView)
-      .selectAll('.node .node-symbol')
-        .attr('stroke-opacity', 0);
-    selection.select('.edge-layer')
-        .call(component.updateEdges, edgesNotSelected);
-    selection.select('.selected-nodes')
-        .call(component.updateNodes, nodesSelected, state.focusedView)
-      .selectAll('.node .node-symbol')
-        .attr('stroke', 'red')
-        .attr('stroke-width', 10)
-        .attr('stroke-opacity', 0.5);
-    selection.select('.selected-edges')
-        .call(component.updateEdges, edgesSelected);
-    selection.call(component.updateAttrs, state);
-  }
-
-
   function setInteraction(selection, state) {
-    // Object selection layer
-    const selectedObj = selection.select('.field')
-      .append('g').classed('selected-obj', true);
-    selectedObj.append('g').classed('selected-edges', true);
-    selectedObj.append('g').classed('selected-nodes', true);
-
     // Rectangle selection layer
     selection.append('g')
         .classed('interactions', true)
@@ -3775,13 +2098,14 @@ var app = (function (d3, _) {
 
     // Background click to clear selection
     selection
-        .on('touchstart', function () { d3__default["default"].event.preventDefault(); })
-        .on('touchmove', function () { d3__default["default"].event.preventDefault(); })
-        .on('click', function () {
-          if (event.shiftKey) d3__default["default"].event.preventDefault();
-          state.ns.forEach(e => { e.selected = false; });
-          state.es.forEach(e => { e.selected = false; });
-          state.updateComponentNotifier();
+        .on('touchstart', event => { event.preventDefault(); })
+        .on('touchmove', event => { event.preventDefault(); })
+        .on('click', event => {
+          state.nodes.forEach((e, i) => {
+            state.nodes[i].__selected = false;
+          });
+          selection.selectAll(".node")
+            .call(component.updateNodeSelection);
         });
 
     // Enter multiple select mode
@@ -3804,28 +2128,15 @@ var app = (function (d3, _) {
 
     // Event listeners
     state.zoomListener = zoomListener(selection, state);
-    state.dragListener = dragListener(selection, state);
     state.selectListener = selectListener(selection, state);
+    state.dragListener = dragListener(selection);
 
     // Update interaction events
     state.updateInteractionNotifier = () => {
       selection.call(state.zoomListener);
-      selection.selectAll('.node')
-          .call(state.selectListener);
-      selection.selectAll('.node-layer .node')
-          .call(state.dragListener);
-      selection.selectAll('.selected-obj')
-          .call(multiDragListener(selection, state));
+      selection.selectAll('.node').call(state.selectListener);
+      selection.selectAll('.node').call(state.dragListener);
       selection.call(resume, state.transform);
-    };
-
-    // Update components
-    state.updateComponentNotifier = () => {
-      state.updateLegendNotifier();
-      const coords = state.ns.map(e => ({x: e.x, y: e.y}));
-      state.setAllCoords(coords);
-      selection.call(updateComponents, state);  // Custom updater
-      state.updateInteractionNotifier();  // Apply drag events to each nodes
     };
 
     // Fit to the viewBox
@@ -3846,7 +2157,7 @@ var app = (function (d3, _) {
       key: 'aggregate',
       name: 'Aggregate',
       force: d3__default["default"].forceSimulation()
-        .force('link', d3__default["default"].forceLink().id(d => d.index).distance(60).strength(1))
+        .force('link', d3__default["default"].forceLink().id(d => d.__index).distance(60).strength(1))
         .force('charge',
           d3__default["default"].forceManyBody().strength(-600).distanceMin(15).distanceMax(720))
         .force('collide', d3__default["default"].forceCollide().radius(90))
@@ -3857,7 +2168,7 @@ var app = (function (d3, _) {
       key: 'tree',
       name: 'Tree',
       force: d3__default["default"].forceSimulation()
-        .force('link', d3__default["default"].forceLink().id(d => d.index).distance(60).strength(2))
+        .force('link', d3__default["default"].forceLink().id(d => d.__index).distance(60).strength(2))
         .force('charge',
           d3__default["default"].forceManyBody().strength(-6000).distanceMin(15).distanceMax(720))
         .force('collide', d3__default["default"].forceCollide().radius(90))
@@ -3868,7 +2179,7 @@ var app = (function (d3, _) {
       key: 'sparse',
       name: 'Sparse',
       force: d3__default["default"].forceSimulation()
-        .force('link', d3__default["default"].forceLink().id(d => d.index).distance(60).strength(2))
+        .force('link', d3__default["default"].forceLink().id(d => d.__index).distance(60).strength(2))
         .force('charge',
           d3__default["default"].forceManyBody().strength(-6000).distanceMin(15).distanceMax(3600))
         .force('collide', d3__default["default"].forceCollide().radius(90))
@@ -3887,17 +2198,17 @@ var app = (function (d3, _) {
 
   function forceDragListener(selection, simulation, state) {
     return d3__default["default"].drag()
-      .on('start', () => {
-        if (!d3__default["default"].event.active) state.relaxNotifier();
+      .on('start', event => {
+        if (!event.active) state.relaxNotifier();
       })
-      .on('drag', d => {
-        d.fx = d3__default["default"].event.x;
-        d.fy = d3__default["default"].event.y;
+      .on('drag', event => {
+        event.subject.fx = event.x;
+        event.subject.fy = event.y;
       })
-      .on('end', d => {
-        if (!d3__default["default"].event.active) simulation.alphaTarget(0);
-        d.fx = null;
-        d.fy = null;
+      .on('end', event => {
+        if (!event.active) simulation.alphaTarget(0);
+        event.subject.fx = null;
+        event.subject.fy = null;
       });
   }
 
@@ -3911,6 +2222,7 @@ var app = (function (d3, _) {
       });
     state.dragListener = interaction.dragListener(selection, state);
     state.forceActive = false;
+    console.log("stick");
   }
 
 
@@ -3928,13 +2240,13 @@ var app = (function (d3, _) {
   function activate(selection, state) {
     state.setForceNotifier = () => {
       const simulation = forceSimulation(
-          state.forceType, state.fieldWidth, state.fieldHeight);
-      simulation.nodes(state.ns)
-        .force('link').links(state.currentEdges());
+          state.config.forceParam, state.fieldWidth, state.fieldHeight);
+      simulation.nodes(state.fnodes)
+        .force('link').links(state.fedges);
       simulation
         .on('tick', () => {
-          const coords = state.ns.map(e => ({x: e.x, y: e.y}));
-          state.setAllCoords(coords);
+          // const coords = state.fnodes.map(e => ({x: e.x, y: e.y}));
+          // state.setAllCoords(coords);
           selection.selectAll(".node")
             .call(component.updateNodeCoords);
           selection.selectAll(".link")
@@ -3942,14 +2254,11 @@ var app = (function (d3, _) {
           state.tickCallback(simulation);
         })
         .on('end', () => {
+          state.setBoundary();
           state.updateComponentNotifier();
+          selection.call(stick, simulation, state);
           state.tickCallback(simulation);
         });
-      if (state.forceActive) {
-        state.coords ? state.relaxNotifier() : state.restartNotifier();
-      } else {
-        state.stickNotifier();
-      }
 
       state.stickNotifier = () => {
         selection.call(stick, simulation, state);
@@ -3962,6 +2271,13 @@ var app = (function (d3, _) {
         selection.call(unstick, simulation, state);
         simulation.alpha(1).restart();
       };
+
+
+      if (state.forceActive) {
+        state.restartNotifier();
+      } else {
+        state.stickNotifier();
+      }
     };
   }
 
@@ -3969,483 +2285,6 @@ var app = (function (d3, _) {
   var force = {
     forceType, forceSimulation, activate
   };
-
-  function mainControlBox(selection, state) {
-    // Zoom
-    selection.append('div')
-        .classed('mb-3', true)
-      .append('div')
-        .classed('fit', true)
-        .call(button.buttonBox, 'Fit to screen', 'primary');
-    // View modes
-    const viewModes = selection.append('div')
-        .classed('mb-3', true);
-      viewModes.append('div')
-        .classed('focused', true)
-        .classed('mb-1', true)
-        .call(box.checkBox, 'Enable focused view');
-      viewModes.append('div')
-        .classed('overlook', true)
-        .classed('mb-1', true)
-        .call(box.checkBox, 'Enable overlook view');
-
-    // Legend
-    const legendOptions = [
-      {key: 'top-left', name: 'Top-left'},
-      {key: 'top-right', name: 'Top-right'},
-      {key: 'bottom-left', name: 'Bottom-left'},
-      {key: 'bottom-right', name: 'Bottom-right'},
-    ];
-    selection.append('div')
-        .classed('legend', true)
-        .classed('mb-3', true)
-        .call(lbox.selectBox, 'Legend')
-        .call(lbox.updateSelectBoxOptions, legendOptions)
-        .on('change', function () {
-          state.legendOrient = box.formValue(d3__default["default"].select(this));
-          state.updateLegendNotifier();
-        });
-
-    // Network threshold
-    const thldGroup = selection.append('div')
-        .classed('thld-group', true)
-        .classed('mb-3', true);
-    thldGroup.append('div')
-        .classed('field', true)
-        .classed('mb-1', true)
-        .call(lbox.selectBox, 'Connection');
-    thldGroup.append('div')
-        .classed('thld', true)
-        .classed('mb-1', true)
-        .call(box.numberBox, 'Threshold')
-        .call(box.updateNumberRange, state.minConnThld, 1, 0.01)
-        .call(badge$1.updateInvalidMessage,
-              `Please provide a valid range (${state.minConnThld}-1.00)`)
-      .select('.form-control')
-        .attr('required', 'required');
-    thldGroup.append('div')
-        .classed('logd', true)
-        .classed('mb-1', true)
-        .call(box.readonlyBox, 'logD');
-    // Force layout
-    const forceBox = selection.append('div')
-        .classed('form-group', true)
-        .classed('form-row', true);
-    forceBox.append('div')
-        .classed('col-12', true)
-      .append('div')
-        .classed('forcetype', true)
-        .classed('mb-1', true)
-        .call(lbox.selectBox, 'Force')
-        .call(lbox.updateSelectBoxOptions, force.forceType)
-        .on('change', function () {
-          const value = box.formValue(d3__default["default"].select(this));
-          state.forceType = value;
-          state.setForceNotifier();
-        });
-    forceBox.append('div')
-        .classed('col-6', true)
-      .append('span')
-        .classed('col-form-label', true)
-        .classed('col-form-label-sm', true)
-        .classed('mb-1', true)
-        .text('Temperature');
-    forceBox.append('div')
-        .classed('col-12', true)
-      .append('div')
-        .classed('temperature', true)
-        .classed('progress', true)
-      .append('div')
-        .classed('progress-bar', true)
-        .classed('w-30', true)
-        .attr('id', 'temperature')
-        .attr('role', 'progressbar')
-        .attr('aria-valuemin', 0)
-        .attr('aria-valuemax', 100);
-    forceBox.append('div')
-        .classed('col-12', true)
-      .append('div')
-        .classed('stick', true)
-        .classed('mb-1', true)
-        .call(box.checkBox, 'Stick nodes');
-    forceBox.append('div')
-        .classed('col-12', true)
-      .append('div')
-        .classed('restart', true)
-        .classed('mb-1', true)
-        .call(button.buttonBox, 'Activate', 'warning');
-  }
-
-
-  function updateMainControl(selection, state) {
-    // Zoom
-    selection.select('.fit')
-        .on('click', function () { state.fitNotifier(); });
-    // Focused view
-    selection.select('.focused')
-        .call(box.updateCheckBox, state.enableFocusedView)
-        .on('change', function () {
-          state.enableFocusedView = box.checkBoxValue(d3__default["default"].select(this));
-          state.focusedView = box.checkBoxValue(d3__default["default"].select(this));
-          state.updateComponentNotifier();
-        });
-    // Overlook view
-    selection.select('.overlook')
-        .call(box.updateCheckBox, state.enableOverlookView)
-        .on('change', function () {
-          state.enableOverlookView = box.checkBoxValue(d3__default["default"].select(this));
-          state.overlookView = box.checkBoxValue(d3__default["default"].select(this));
-          state.updateComponentNotifier();
-        });
-    // Network threshold
-    const thldGroup = selection.select('.thld-group');
-    const thldFields = state.edges.fields
-      .filter(e => misc.sortType(e.format) !== 'none')
-      .filter(e => !['source', 'target'].includes(e.key));
-    thldGroup.select('.field')
-        .call(lbox.updateSelectBoxOptions, thldFields)
-        .call(box.updateFormValue, state.connThldField);
-    thldGroup.select('.thld')
-        .call(box.updateFormValue, state.currentConnThld);
-    thldGroup.selectAll('.field, .thld')
-        .on('change', function () {
-          if(!box.formValid(thldGroup.select('.thld'))) return;
-          const field = box.formValue(thldGroup.select('.field'));
-          const thld = box.formValue(thldGroup.select('.thld'));
-          state.connThldField = field;
-          state.currentConnThld = thld;
-          thldGroup.select('.logd').dispatch('update');
-          state.setForceNotifier();
-          state.updateComponentNotifier();
-        });
-    thldGroup.select('.logd')
-        .on('update', function () {
-          // Calculate edge density
-          const field = state.connThldField;
-          const thld = state.currentConnThld;
-          const numEdges = state.es.filter(e => e[field] >= thld).length;
-          const n = state.ns.length;
-          const combinations = n * (n - 1) / 2;
-          const logD = d3__default["default"].format('.2f')(Math.log10(numEdges / combinations));
-          d3__default["default"].select(this).call(box.updateReadonlyValue, logD);
-        })
-        .dispatch('update');
-
-    // Force layout
-    state.tickCallback = (simulation) => {
-      const alpha = simulation.alpha();
-      const isStopped = alpha <= simulation.alphaMin();
-      const progress = parseInt(isStopped ? 0 : alpha * 100);
-      selection.select('.temperature')
-        .select('.progress-bar')
-          .classed('bg-success', isStopped)
-          .classed('bg-warning', !isStopped)
-          .style('width', `${progress}%`)
-          .attr('aria-valuenow', progress);
-    };
-    selection.select('.stick')
-        .call(box.updateCheckBox, !state.forceActive)
-        .on('change', function () {
-          const value = box.checkBoxValue(d3__default["default"].select(this));
-          state.forceActive = !value;
-          selection.select('.temperature')
-              .style('background-color', value ? '#a3e4d7' : '#e9ecef')
-            .select('.progress-bar')
-              .style('width', `0%`)
-              .attr('aria-valuenow', 0);
-          value ? state.stickNotifier() : state.relaxNotifier();
-          state.updateComponentNotifier();
-        });
-    selection.select('.restart')
-        .on('click', function () {
-          selection.select('.stick')
-              .call(box.updateCheckBox, false)
-              .dispatch('change');
-          state.restartNotifier();
-        });
-  }
-
-
-  function updateNodeColorControl(selection, state) {
-    const fieldOptions = state.nodes.fields
-      .filter(e => misc.sortType(e.format) !== 'none');
-    selection
-        .call(cbox.updateColorControl, fieldOptions, state.nodeColor)
-        .on('change', function() {
-          if (!cbox.colorControlValid(selection)) return;
-          state.nodeColor = cbox.colorControlState(selection);
-          if (state.nodeColor.scale === 'ordinal') {
-            const keys = state.nodes.records().map(e => e[state.nodeColor.field]);
-            state.nodeColor.domain = ___default["default"].uniq(keys).sort();
-          }
-          state.updateNodeAttrNotifier();
-        });
-  }
-
-
-  function updateEdgeColorControl(selection, state) {
-    const fieldOptions = state.edges.fields
-      .filter(e => misc.sortType(e.format) !== 'none')
-      .filter(e => !['source', 'target'].includes(e.key));
-    selection
-        .call(cbox.updateColorControl, fieldOptions, state.edgeColor)
-        .on('change', function() {
-          if (!cbox.colorControlValid(selection)) return;
-          state.edgeColor = cbox.colorControlState(selection);
-          if (state.edgeColor.scale === 'ordinal') {
-            const keys = state.edges.records().map(e => e[state.edgeColor.field]);
-            state.edgeColor.domain = ___default["default"].uniq(keys).sort();
-          }
-          state.updateEdgeAttrNotifier();
-        });
-
-    // TODO: not implemented yet
-    selection.select('.legend input').property('disabled', true);
-  }
-
-
-  function updateNodeSizeControl(selection, state) {
-    const fieldOptions = state.nodes.fields
-      .filter(e => misc.sortType(e.format) !== 'none');
-    selection
-        .call(cbox.updateSizeControl, fieldOptions, state.nodeSize)
-        .on('change', function() {
-          if (!cbox.sizeControlValid(selection)) return;
-          state.nodeSize = cbox.sizeControlState(selection);
-          state.updateNodeAttrNotifier();
-        });
-  }
-
-
-  function updateEdgeWidthControl(selection, state) {
-    const fieldOptions = state.edges.fields
-      .filter(e => misc.sortType(e.format) !== 'none')
-      .filter(e => !['source', 'target'].includes(e.key));
-    selection
-        .call(cbox.updateSizeControl, fieldOptions, state.edgeWidth)
-        .on('change', function() {
-          if (!cbox.sizeControlValid(selection)) return;
-          state.edgeWidth = cbox.sizeControlState(selection);
-          state.updateEdgeAttrNotifier();
-        });
-  }
-
-
-  function updateNodeLabelControl(selection, state) {
-    const fieldOptions = state.nodes.fields
-      .filter(e => misc.sortType(e.format) !== 'none');
-    selection
-        .call(cbox.updateLabelControl, fieldOptions,
-              state.nodeLabel, state.nodeLabelColor)
-        .on('change', function() {
-          if (!cbox.labelControlValid(selection)) return;
-          const values = cbox.labelControlState(selection);
-          state.nodeLabel = values.label;
-          state.nodeLabelColor = values.labelColor;
-          if (state.nodeLabelColor.scale === 'ordinal') {
-            const keys = state.nodes.records()
-              .map(e => e[state.nodeLabelColor.field]);
-            state.nodeLabelColor.domain = ___default["default"].uniq(keys).sort();
-          }
-          state.updateNodeAttrNotifier();
-        });
-  }
-
-
-  function updateEdgeLabelControl(selection, state) {
-    const fieldOptions = state.edges.fields
-      .filter(e => misc.sortType(e.format) !== 'none')
-      .filter(e => !['source', 'target'].includes(e.key));
-    selection
-        .call(cbox.updateLabelControl, fieldOptions,
-              state.edgeLabel, state.edgeLabelColor)
-        .on('change', function() {
-          if (!cbox.labelControlValid(selection)) return;
-          const values = cbox.labelControlState(selection);
-          state.edgeLabel = values.label;
-          state.edgeLabelColor = values.labelColor;
-          if (state.edgeLabelColor.scale === 'ordinal') {
-            const keys = state.edges.records()
-              .map(e => e[state.edgeLabelColor.field]);
-            state.edgeLabelColor.domain = ___default["default"].uniq(keys).sort();
-          }
-          state.updateEdgeAttrNotifier();
-        });
-  }
-
-
-  function controlBox(selection, state) {
-    // Clean up
-    selection.select('nav').remove();
-    selection.select('.tab-content').remove();
-
-    selection.call(
-      cbox.controlBoxFrame, 'control-frame-nav', 'control-frame-content');
-    const tabs = selection.select('.nav-tabs');
-    const content = selection.select('.tab-content');
-
-    // Main
-    tabs.append('a')
-        .classed('active', true)
-        .attr('aria-selected', 'true')
-        .call(cbox.controlBoxNav, 'control-main', 'Main');
-    content.append('div')
-        .classed('show', true)
-        .classed('active', true)
-        .classed('control-main', true)
-        .call(cbox.controlBoxItem, 'control-main')
-        .call(mainControlBox, state);
-
-    // Color
-    tabs.append('a')
-        .call(cbox.controlBoxNav, 'control-color', 'Color');
-    content.append('div')
-        .classed('control-color', true)
-        .call(cbox.controlBoxItem, 'control-color')
-        .call(cbox.colorControlBox, cscale.colorScales);
-
-    // Size
-    tabs.append('a')
-        .call(cbox.controlBoxNav, 'control-size', 'Size');
-    content.append('div')
-        .classed('control-size', true)
-        .call(cbox.controlBoxItem, 'control-size')
-        .call(cbox.sizeControlBox);
-
-    // Label
-    tabs.append('a')
-        .call(cbox.controlBoxNav, 'control-label', 'Label');
-    content.append('div')
-        .classed('control-label', true)
-        .call(cbox.controlBoxItem, 'control-label')
-        .call(cbox.labelControlBox, cscale.colorScales);
-
-    // Edge color
-    tabs.append('a')
-        .call(cbox.controlBoxNav, 'control-edgecolor', 'eColor');
-    content.append('div')
-        .classed('control-edgecolor', true)
-        .call(cbox.controlBoxItem, 'control-edgecolor')
-        .call(cbox.colorControlBox, cscale.colorScales);
-
-    // Edge width
-    tabs.append('a')
-        .call(cbox.controlBoxNav, 'control-edgewidth', 'eWidth');
-    content.append('div')
-        .classed('control-edgewidth', true)
-        .call(cbox.controlBoxItem, 'control-edgewidth')
-        .call(cbox.sizeControlBox);
-
-    // Edge label
-    tabs.append('a')
-        .call(cbox.controlBoxNav, 'control-edgelabel', 'eLabel');
-    content.append('div')
-        .classed('control-edgelabel', true)
-        .call(cbox.controlBoxItem, 'control-edgelabel')
-        .call(cbox.labelControlBox, cscale.colorScales);
-
-    state.updateControlBoxNotifier = () => {
-      selection.call(updateControlBox, state);
-    };
-  }
-
-
-  function updateControlBox(selection, state) {
-    selection.select('.control-main')
-        .call(updateMainControl, state);
-    selection.select('.control-color')
-        .call(updateNodeColorControl, state);
-    selection.select('.control-size')
-        .call(updateNodeSizeControl, state);
-    selection.select('.control-label')
-        .call(updateNodeLabelControl, state);
-    selection.select('.control-edgecolor')
-        .call(updateEdgeColorControl, state);
-    selection.select('.control-edgewidth')
-        .call(updateEdgeWidthControl, state);
-    selection.select('.control-edgelabel')
-        .call(updateEdgeLabelControl, state);
-  }
-
-
-  var control = {
-    controlBox, updateControlBox
-  };
-
-  function app(view, nodes, edges) {
-    const menubar = d3__namespace.select('#menubar')
-        .classed('my-1', true);
-    menubar.selectAll('div,span,a').remove();  // Clean up
-    const dialogs = d3__namespace.select('#dialogs');
-    dialogs.selectAll('div').remove();  // Clean up
-
-    const state = new NetworkState(view, nodes, edges);
-    // TODO: define field size according to the data size
-    state.fieldWidth = 1200;
-    state.fieldHeight = 1200;
-
-    // Network view control
-    const menu = menubar.append('div')
-        .call(button.dropdownMenuButton, 'Menu', 'primary', 'network-white')
-        .select('.dropdown-menu');
-    menu.append('a').call(renameDialog.menuLink);
-    menu.append('a')
-        .call(button.dropdownMenuItem, 'Save', 'menu-save')
-        .on('click', function () {
-          return state.save()
-            .then(() => menubar.select('.notify-saved').call(badge$1.notify));
-        });
-
-    // Dashboard link
-    menubar.append('a')
-        .call(button.menuButtonLink, 'Dashboard',
-              'outline-secondary', 'status-gray')
-        .attr('href', 'dashboard.html')
-        .attr('target', '_blank');
-
-    // Status
-    menubar.append('span')
-        .classed('loading-circle', true)
-        .call(badge$1.loadingCircle);
-    menubar.append('span')
-        .classed('notify-saved', true)
-        .call(badge$1.alert)
-        .call(badge$1.updateAlert, 'State saved', 'success', 'check-green')
-        .style('display', 'none');
-    menubar.append('span')
-        .classed('name', true);
-    menubar.append('span')
-        .classed('nodes-count', true)
-        .call(badge$1.badge);
-    menubar.append('span')
-        .classed('edges-count', true)
-        .call(badge$1.badge);
-
-    // Dialogs
-    dialogs.append('div')
-        .classed('renamed', true)
-        .call(renameDialog.body);
-    // TODO: select snapshot and view
-
-    // Contents
-    const frame = d3__namespace.select('#nw-frame')
-        .call(transform$1.viewFrame, state);
-    frame.select('.view')
-        .call(component.networkView, state)
-        .call(force.activate, state)
-        .call(interaction.setInteraction, state);
-    d3__namespace.select('#nw-control')
-        .call(control.controlBox, state);
-
-    // Resize window
-    window.onresize = () =>
-      d3__namespace.select('#nw-frame').call(transform$1.resize, state);
-
-    // Update
-    state.updateAllNotifier();
-    updateApp(state);
-  }
-
 
   function updateApp(state) {
     // Title
@@ -4457,12 +2296,12 @@ var app = (function (d3, _) {
     const onLoading = d3__namespace.select('#menubar .loading-circle');
     const commaf = d3__namespace.format(',');
     d3__namespace.select('#menubar .nodes-count')
-        .call(badge$1.updateBadge, `${commaf(state.nodes.size())} nodes`,
+        .call(badge$1.updateBadge, `${commaf(state.nodes.length)} nodes`,
               'light', 'nodes-gray')
       .select('.text')
         .style('color', 'gray');
     d3__namespace.select('#menubar .edges-count')
-        .call(badge$1.updateBadge, `${commaf(state.edges.size())} edges`,
+        .call(badge$1.updateBadge, `${commaf(state.edges.length)} edges`,
               'light', 'edges-gray')
       .select('.text')
         .style('color', 'gray');
@@ -4484,7 +2323,7 @@ var app = (function (d3, _) {
   }
 
 
-  function run() {
+  async function run() {
     const err = client.compatibility();
     if (err) {
       d3__namespace.select('body')
@@ -4492,39 +2331,105 @@ var app = (function (d3, _) {
         .text(err);
       return;
     }
-    // TODO: offline mode flags
-    document.location.protocol !== "file:";  // TODO
-    //client.registerServiceWorker();
-    const instance = client.URLQuery().instance || null;
-    const viewID = client.URLQuery().view || null;
-    if (instance == null && viewID == null) { return; }
-    return idb.getView(instance, viewID)
-      .then(view => {
-        if (!view) throw('ERROR: invalid URL');
-        view.instance = instance;
-        return Promise.all([
-          idb.getCollection(instance, view.nodes),
-          idb.getCollection(instance, view.edges)
-        ])
-        .then(colls => {
-          colls[0].instance = instance;
-          colls[1].instance = instance;
-          app(view, colls[0], colls[1]);
+
+    const header1 = d3__namespace.select('#header1')
+        .classed('my-1', true);
+    const header2 = d3__namespace.select('#header2')
+        .classed('my-1', true);
+    d3__namespace.select('#dialogs');
+    // header1.selectAll('div,span,a').remove();  // Clean up
+    // header2.selectAll('div,span,a').remove();  // Clean up
+    // dialogs.selectAll('div').remove();  // Clean up
+
+
+    const actionIcon = (sel, icon) => sel.append('img')
+        .attr('src', `${button.iconBaseURL}${icon}.svg`)
+        .classed('mx-1', true)
+        .style('width', '1.25rem')
+        .style('height', '1.25rem');
+    // Header
+    header1.append('span')
+        .classed('name', true);
+    header1.append('a')
+        .call(button.dropdownMenuFile, 'Open new session',
+          '.json,.gz', 'menu-import')
+        .on('change', function () {
+          d3__namespace.select('#menubar .loading-circle').style('display', 'inline-block');
+          const file = button.dropdownMenuFileValue(d3__namespace.select(this));
+          return hfile.loadJSON(file)
+            .then(idb.importItem)
+            .then(updateApp);
         });
-      })
-      .catch(err => {
-        console.error(err);
-        d3__namespace.select('#nw-frame')
-          .style('color', 'red')
-          .text(err);
-      });
+    header1.append('a')
+        .call(button.dropdownMenuItem, 'Export current session', 'menu-export')
+        .on('click', () => {
+          const data = JSON.parse(JSON.stringify(record));
+          delete data.instance;
+          delete data.sessionStarted;
+          hfile.downloadJSON(data, data.name);
+        });
+    header1.append('span')
+        .classed('loading-circle', true)
+        .call(badge$1.loadingCircle);
+
+    header2.append('a').call(actionIcon, 'menu-export')
+        .on('click', function () {
+          return state.saveSnapshot(idb)
+            .then(menubar.select('.notify-saved').call(badge$1.notify));
+        });
+    header2.append('span')
+        .classed('notify-saved', true)
+        .call(badge$1.alert)
+        .call(badge$1.updateAlert, 'State saved', 'success', 'check-green')
+        .style('display', 'none');
+    //const sid = await idb.putSession(stub);
+    //await idb.putConfig("currentSession", sid);
+
+    const sessionid = await idb.getConfig("currentSession");
+    if (!sessionid) { return; }
+    const session = await idb.getSession(sessionid);
+    const state = new NetworkState(session);
+    // TODO: define field size according to the data size
+    state.fieldWidth = 1200;
+    state.fieldHeight = 1200;
+
+
+    // TODO: export session (json.tar.gz)
+
+    // snapshotはcontrolでpull down選択?にする
+    // save snapshotもcontrolに表示
+    // 初期は最新のsnapshotを表示
+
+    // Jupyter notebook風に
+    // TODO: rename session
+    // TODO: rename snapshot
+
+    // TODO: 座標の初期化(0,0付近にランダム配置)
+
+    // Contents
+    const frame = d3__namespace.select('#frame')
+        .call(transform$1.viewFrame, state);
+    frame.select('.view')
+        .call(component.networkView, state)
+        .call(force.activate, state)
+        .call(interaction.setInteraction, state);
+    //d3.select('#control')
+    //    .call(control.controlBox, state);
+
+    // Resize window
+    window.onresize = () =>
+      d3__namespace.select('#frame').call(transform$1.resize, state);
+
+    // Update
+    state.updateAllNotifier();
+    updateApp(state);
   }
 
 
-  var app$1 = {
+  var app = {
     run
   };
 
-  return app$1;
+  return app;
 
-})(d3, _);
+})(d3, _, pako);

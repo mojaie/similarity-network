@@ -16,7 +16,7 @@ const svgHeight = 180;  //TODO
 
 function updateNodes(selection, records, showStruct) {
   const nodes = selection.selectAll('.node')
-    .data(records, d => d.index);
+    .data(records, d => d.__index);
   nodes.exit().remove();
   const entered = nodes.enter()
     .append('g')
@@ -27,10 +27,6 @@ function updateNodes(selection, records, showStruct) {
   entered.append('g')
       .attr('class', 'node-content')
       .attr('transform', `translate(${-svgWidth / 2},${-svgHeight / 2})`);
-  entered.append('text')
-      .attr('class', 'node-label')
-      .attr('x', 0)
-      .attr('text-anchor', 'middle');
   entered.append('foreignObject')
       .attr('class', 'node-html')
     .append('xhtml:div');
@@ -45,7 +41,7 @@ function updateNodes(selection, records, showStruct) {
 
 function updateEdges(selection, records) {
   const edges = selection.selectAll('.link')
-    .data(records, d => `${d.source.index}_${d.target.index}`);
+    .data(records, d => d.__index);
   edges.exit().remove();
   const entered = edges.enter()
     .append('g')
@@ -62,66 +58,52 @@ function updateEdges(selection, records) {
 
 
 function updateNodeAttrs(selection, state) {
-  const colorConv = scale.scaleFunction(state.nodeColor);
-  const sizeConv = scale.scaleFunction(state.nodeSize);
-  const labelColorConv = scale.scaleFunction(state.nodeLabelColor);
-  const field = state.nodes.fields
-    .find(e => e.key === state.nodeLabel.field);
-  const textConv = value => {
-    return field.format === 'd3_format'
-      ? misc.formatNum(value, field.d3_format) : value;
+  const colorScaleFunc = scale.scaleFunction(state.appearance.nodeColor, "color");
+  const sizeScaleFunc = scale.scaleFunction(state.appearance.nodeSize, "nodeSize");
+  const labelField = state.appearance.nodeLabel.field;
+  const textFormatFunc = value => {
+    return value
+    // return labelField.format === 'd3_format'
+    //  ? misc.formatNum(value, labelField.d3_format) : value;
   };
   selection.selectAll('.node').select('.node-symbol')
-      .attr('r', d => sizeConv(d[state.nodeSize.field]))
-      .style('fill', d => colorConv(d[state.nodeColor.field]));
+      .attr('r', d => sizeScaleFunc(d[state.appearance.nodeSize.field]))
+      .style('fill', d => colorScaleFunc(d[state.appearance.nodeColor.field]));
   // TODO: tidy up (like rowFactory?)
-  if (field.format === 'html') {
-    const htwidth = 200;
-    const fo = selection.selectAll('.node').select('.node-html');
-    fo.attr('x', -htwidth / 2)
-      .attr('y', d => state.focusedView ? svgWidth / 2 - 10
-        : parseFloat(sizeConv(d[state.nodeSize.field])))
-      .attr('width', htwidth)
-      .attr('height', 1)
-      .attr('overflow', 'visible');
-    fo.select('div')
-      .style('font-size', `${state.nodeLabel.size}px`)
-      .style('color', d => labelColorConv(d[state.nodeLabelColor.field]))
-      .style('text-align', 'center')
-      .style('display', state.nodeLabel.visible ? 'block' : 'none')
-      .html(d => d[state.nodeLabel.field]);
-    selection.selectAll('.node').select('.node-label').text('');
-  } else {
-    selection.selectAll('.node').select('.node-label')
-        .attr('font-size', state.nodeLabel.size)
-        .attr('y', d => state.focusedView ? svgWidth / 2 - 10
-          : parseFloat(sizeConv(d[state.nodeSize.field])))
-        .attr('visibility', state.nodeLabel.visible ? 'inherit' : 'hidden')
-        .style('fill', d => labelColorConv(d[state.nodeLabelColor.field]))
-        .text(d => textConv(d[state.nodeLabel.field]));
-    selection.selectAll('.node').select('.node-html div').html('');
-  }
+  const htwidth = 200;
+  const fo = selection.selectAll('.node').select('.node-html');
+  fo.attr('x', -htwidth / 2)
+    .attr('y', d => state.showNodeImage ? svgWidth / 2 - 10
+      : parseFloat(sizeScaleFunc(d[state.appearance.nodeSize.field])))
+    .attr('width', htwidth)
+    .attr('height', 1)
+    .attr('overflow', 'visible');
+  fo.select('div')
+    .style('font-size', `${state.appearance.nodeLabel.size}px`)
+    .style('color', d => d.labelColor || "#cccccc")
+    .style('text-align', 'center')
+    .style('display', state.appearance.nodeLabel.visible ? 'block' : 'none')
+    .html(d => textFormatFunc(d[state.appearance.nodeLabel.field]));
 }
 
 
 function updateEdgeAttrs(selection, state) {
-  const colorConv = scale.scaleFunction(state.edgeColor);
-  const widthConv = scale.scaleFunction(state.edgeWidth);
-  const labelColorConv = scale.scaleFunction(state.edgeLabelColor);
-  const field = state.edges.fields
-    .find(e => e.key === state.edgeLabel.field);
-  const textConv = value => {
-    return field.format === 'd3_format'
-      ? misc.formatNum(value, field.d3_format) : value;
+  const colorScaleFunc = scale.scaleFunction(state.appearance.edgeColor, "color");
+  const widthScaleFunc = scale.scaleFunction(state.appearance.edgeWidth, "edgeWidth");
+  const labelField = state.appearance.edgeLabel.field;
+  const textFormatFunc = value => {
+    return value
+    //return labelField.format === 'd3_format'
+    //  ? misc.formatNum(value, labelField.d3_format) : value;
   };
   selection.selectAll('.link').select('.edge-line')
-    .style('stroke', d => colorConv(d[state.edgeColor.field]))
-    .style('stroke-width', d => widthConv(d[state.edgeWidth.field]));
+    .style('stroke', d => colorScaleFunc(d[state.appearance.edgeColor.field]))
+    .style('stroke-width', d => widthScaleFunc(d[state.appearance.edgeWidth.field]));
   selection.selectAll('.link').select('.edge-label')
-    .attr('font-size', state.edgeLabel.size)
-    .attr('visibility', state.edgeLabel.visible ? 'inherit' : 'hidden')
-    .style('fill', d => labelColorConv(d[state.edgeLabelColor.field]))
-    .text(d => textConv(d[state.edgeLabel.field]));
+    .attr('font-size', state.appearance.edgeLabel.size)
+    .attr('visibility', state.appearance.edgeLabel.visible ? 'inherit' : 'hidden')
+    .style('fill', d => d.labelColor || "#cccccc")
+    .text(d => textFormatFunc(d[state.appearance.edgeLabel.field]));
 }
 
 
@@ -131,17 +113,23 @@ function updateNodeCoords(selection) {
 
 
 function updateEdgeCoords(selection) {
-  selection.attr('transform', d => `translate(${d.sx}, ${d.sy})`);
+  selection.attr('transform', d => `translate(${d.source.x}, ${d.source.y})`);
   selection.select('.edge-line')
     .attr('x1', 0)
     .attr('y1', 0)
-    .attr('x2', d => d.tx - d.sx)
-    .attr('y2', d => d.ty - d.sy);
+    .attr('x2', d => d.target.x - d.source.x)
+    .attr('y2', d => d.target.y - d.source.y);
   selection.select('.edge-label')
-    .attr('x', d => (d.tx - d.sx) / 2)
-    .attr('y', d => (d.ty - d.sy) / 2);
+    .attr('x', d => (d.target.x - d.source.x) / 2)
+    .attr('y', d => (d.target.y - d.source.y) / 2);
 }
 
+function updateNodeSelection(selection) {
+  selection.select('.node-symbol')
+    .attr('stroke', d => d.__selected ? 'red' : null)
+    .attr('stroke-width', d => d.__selected ? 10 : null)
+    .attr('stroke-opacity', d => d.__selected ? 0.5 : 0);
+}
 
 function updateAttrs(selection, state) {
   selection.call(updateNodeAttrs, state);
@@ -150,19 +138,10 @@ function updateAttrs(selection, state) {
 
 
 function updateComponents(selection, state) {
-  const nodesToRender = state.nodesToRender();
-  const numNodes = nodesToRender.length;
-  if (state.enableFocusedView) {
-    state.focusedView = numNodes < state.focusedViewThreshold;
-  }
-  if (state.enableOverlookView) {
-    state.overlookView = numNodes > state.overlookViewThreshold;
-  }
-  const edgesToRender = state.overlookView ? [] : state.edgesToRender();
   selection.select('.node-layer')
-    .call(updateNodes, nodesToRender, state.focusedView);
+    .call(updateNodes, state.vnodes, false);
   selection.select('.edge-layer')
-    .call(updateEdges, edgesToRender);
+    .call(updateEdges, state.vedges);
   selection.call(updateAttrs, state);
 }
 
@@ -185,16 +164,16 @@ function moveEdge(selection, sx, sy, tx, ty) {
 }
 
 
-function move(selection, node, x, y) {
+function move(selection, node, state, x, y) {
   const n = d3.select(node).call(moveNode, x, y).datum();
   selection.select('.edge-layer')
     .selectAll(".link")
-    .filter(d => n.adjacency.map(e => e[1]).includes(d.num))
+    .filter(d => state.adjacency.map(e => e[1].__index).includes(d.__index))
     .each(function (d) {
-      if (n.index === d.source.index) {
-        d3.select(this).call(moveEdge, x, y, d.tx, d.ty);
-      } else if (n.index === d.target.index) {
-        d3.select(this).call(moveEdge, d.sx, d.sy, x, y);
+      if (n.__index === d.source.index) {
+        d3.select(this).call(moveEdge, x, y, d.target.x, d.target.y);
+      } else if (n.__index === d.target.index) {
+        d3.select(this).call(moveEdge, d.source.x, d.source.y, x, y);
       }
     });
 }
@@ -210,36 +189,37 @@ function networkView(selection, state) {
   legendGroup.append('g')
       .classed('nodecolor', true)
       .call(legend.colorBarLegend);
-
   // Apply changes in datasets
   state.updateAllNotifier = () => {
-    state.updateWorkingCopy();
-    state.updateControlBoxNotifier();  // Update selectBox options
+    state.updateFilter();
+    state.updateVisibility();
+    //state.updateControlBoxNotifier();  // Update selectBox options
     state.setForceNotifier();
     state.updateComponentNotifier();
   };
   // Apply changes in nodes and edges displayed
   state.updateComponentNotifier = () => {
-    state.updateLegendNotifier();
-    const coords = state.ns.map(e => ({x: e.x, y: e.y}));
-    state.setAllCoords(coords);
+    // state.updateLegendNotifier();
+    // const coords = state.ns.map(e => ({x: e.x, y: e.y}));
+    // state.setAllCoords(coords);
     selection.call(updateComponents, state);
     state.updateInteractionNotifier();  // Apply drag events to each nodes
   };
   state.updateNodeNotifier = () => {
-    nodes.call(updateNodes, state.nodesToRender());
-    state.updateLegendNotifier();
+    nodes.call(updateNodes, state.vnodes);
+    // state.updateLegendNotifier();
   };
   state.updateEdgeNotifier = () => {
-    edges.call(updateEdges, state.edgesToRender());
+    edges.call(updateEdges, state.vedges);
   };
   state.updateNodeAttrNotifier = () => {
     nodes.call(updateNodeAttrs, state);
-    state.updateLegendNotifier();
+    // state.updateLegendNotifier();
   };
   state.updateEdgeAttrNotifier = () => {
     edges.call(updateEdgeAttrs, state);
   };
+  /*
   state.updateLegendNotifier = () => {
     legendGroup.call(legend.updateLegendGroup,
                      state.viewBox, state.legendOrient);
@@ -247,11 +227,13 @@ function networkView(selection, state) {
         .attr('visibility', state.nodeColor.legend ? 'inherit' : 'hidden')
         .call(legend.updateColorBarLegend, state.nodeColor);
   };
+  */
 }
 
 
 export default {
   updateNodes, updateEdges, updateNodeCoords, updateEdgeCoords,
-  updateNodeAttrs, updateEdgeAttrs, updateAttrs, updateComponents,
+  updateNodeAttrs, updateEdgeAttrs, updateNodeSelection,
+  updateAttrs, updateComponents,
   move, moveEdge, networkView
 };

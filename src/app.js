@@ -30,12 +30,12 @@ function updateApp(state) {
   const onLoading = d3.select('#menubar .loading-circle');
   const commaf = d3.format(',');
   d3.select('#menubar .nodes-count')
-      .call(badge.updateBadge, `${commaf(state.nodes.size())} nodes`,
+      .call(badge.updateBadge, `${commaf(state.nodes.length)} nodes`,
             'light', 'nodes-gray')
     .select('.text')
       .style('color', 'gray');
   d3.select('#menubar .edges-count')
-      .call(badge.updateBadge, `${commaf(state.edges.size())} edges`,
+      .call(badge.updateBadge, `${commaf(state.edges.length)} edges`,
             'light', 'edges-gray')
     .select('.text')
       .style('color', 'gray');
@@ -149,7 +149,6 @@ async function run() {
   const sessionid = await idb.getConfig("currentSession");
   if (!sessionid) { return; }
   const session = await idb.getSession(sessionid);
-  console.log(session);
   const state = new NetworkState(session);
   // TODO: define field size according to the data size
   state.fieldWidth = 1200;
@@ -175,8 +174,8 @@ async function run() {
       .call(component.networkView, state)
       .call(force.activate, state)
       .call(interaction.setInteraction, state);
-  d3.select('#control')
-      .call(control.controlBox, state);
+  //d3.select('#control')
+  //    .call(control.controlBox, state);
 
   // Resize window
   window.onresize = () =>

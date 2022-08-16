@@ -7,71 +7,43 @@ import TransformState from  '../common/transform.js';
 export default class NetworkState extends TransformState {
   constructor(session) {
     super(1200, 1200, null);
-    this.session = session;
-    // default snapshot
-    if (!this.session.hasOwnProperty("snapshots")) {
-      this.session.snapshots = [];
-    }
-    if (this.session.snapshots.length == 0) {
-      this.session.snapshots.push({});
-    }
-    this.currentSnapshot = this.session.snapshots.slice(-1)[0]
-    
-    if (!this.currentSnapshot.hasOwnProperty("name")) {
-      this.currentSnapshot.name = "default";
-    }
-    if (!this.currentSnapshot.hasOwnProperty("filters")) {
-      this.currentSnapshot.filters = [];
-    }
-    if (!this.currentSnapshot.hasOwnProperty("positions")) {
-      this.currentSnapshot.positions = [];
-    }
-    if (!this.currentSnapshot.hasOwnProperty("config")) {
-      this.currentSnapshot.config = {
-        showNodeImageThreshold: 100,
-        alwaysShowNodeImage: false,
-        showEdgeThreshold: 500,
-        alwaysShowEdge: false,
-        legendOrientation: 'top-left',
-        forceParam: 'aggregate'
-      };
-    }
-    if (!this.currentSnapshot.hasOwnProperty("appearance")) {
-      this.currentSnapshot.appearance = {
-        nodecolor: {
-          field: null, rangePreset: 'green',
-          scale: 'linear', domain: [0, 1]
-        },
-        nodeSize: {
-          field: null, range: 'medium',
-          scale: 'linear', domain: [1, 1]
-        },
-        nodeLabel: {
-          field: null, size: 20, visible: false
-        },
-        edgeColor: {
-          field: null, rengePreset: 'gray',
-          scale: 'linear', domain: [0, 1]
-        },
-        edgeWidth: {
-          field: null, scale: 'linear', domain: [0.5, 1],
-          range: [10, 10], unknown: 1
-        },
-        edgeLabel: {
-          field: null, size: 12, visible: false
-        }
-      };
-    }
+    // Session properties
+    this.sessionName = session.name;
+    this.nodes = session.nodes;
+    this.nodes.forEach((e, i) => {
+      e.__index = i;  // internal id for d3.force
+      e.__selected = false;  // for multiple selection
+    })
+    this.edges = session.edges;
+    this.edges.forEach((e, i) => {
+      // internal id for d3.force
+      e.__source = e.source;
+      e.__target = e.target;
+      e.__index = i;
+    })
 
-    /* Settings */
+    // Snapshot properties
+    this.name = null;
+    this.filters = null;
+    this.positions = null;
+    this.config = null;
+    this.appearance = null;
 
+    // filtered elements
+    this.fnodes = [];
+    this.fedges = [];
+    this.adjacency = [];
+
+    // visible elements
+    this.vnodes = [];
+    this.vedges = [];
+
+    // Visibility
     this.showNodeImage = false;
     this.showEdge = false;
 
     // Force
-    this.coords = this.currentSnapshot.positions;
-    this.forceActive = !this.coords;
-    this.forceParam = this.currentSnapshot.config.forceParam;
+    this.forceActive = true;  // TODO: if no initial positions
 
     // Event listeners
     this.zoomListener = null;
@@ -94,32 +66,102 @@ export default class NetworkState extends TransformState {
     this.restartNotifier = () => {};
     this.tickCallback = () => {};
 
-    // Working copies
-    // D3.force does some destructive operations
-    this.ns = null;
-    this.es = null;
+    // Initialize snapshot
+    let snapshot = {};
+    if (session.hasOwnProperty("snapshots") && session.snapshots.length > 0) {
+      snapshot = session.snapshots.slice(-1)[0];
+    }
+    this.applySnapshot(snapshot)
   }
 
-  updateWorkingCopy() {
-    if (this.ns) {
-      this.coords = this.ns.map(e => ({x: e.x, y: e.y}));
+  applySnapshot(snapshot) {
+    this.name = snapshot.hasOwnProperty("name") ? snapshot.name : "default";
+    this.filters = snapshot.hasOwnProperty("filters") ? snapshot.filters : [];
+    this.positions = snapshot.hasOwnProperty("positions") ? snapshot.filters : [];
+    this.config = snapshot.hasOwnProperty("config") ? snapshot.config : {
+      showNodeImageThreshold: 100,
+      alwaysShowNodeImage: false,
+      showEdgeThreshold: 500,
+      alwaysShowEdge: false,
+      legendOrientation: 'top-left',
+      forceParam: 'aggregate'
+    };
+    this.appearance = snapshot.hasOwnProperty("appearance") ? snapshot.appearance : {
+      nodeColor: {
+        field: null, rangePreset: 'default',
+        scale: 'linear', domain: [0, 1]
+      },
+      nodeSize: {
+        field: null, rangePreset: 'medium',
+        scale: 'linear', domain: [1, 1]
+      },
+      nodeLabel: {
+        field: null, size: 20, visible: false
+      },
+      edgeColor: {
+        field: null, rangePreset: 'monogray',
+        scale: 'linear', domain: [0, 1]
+      },
+      edgeWidth: {
+        field: null, rangePreset: 'medium',
+        scale: 'linear', domain: [0.5, 1]
+      },
+      edgeLabel: {
+        field: null, size: 12, visible: false
+      }
+    };
+  }
+
+  takeSnapshot() {
+    // TODO: save coords
+    return {
+      name: this.name,
+      filters: this.filters,
+      positions: this.positions,
+      config: this.config,
+      appearance: this.appearance
     }
-    this.ns = JSON.parse(JSON.stringify(this.session.nodes));
-    this.ns.forEach(n => { n.adjacency = []; });
-    this.es = JSON.parse(JSON.stringify(this.session.edges));
-    this.es.forEach((e, i) => {
-      e.num = i;  // e.index will be overwritten by d3-force
-      this.ns[e.source].adjacency.push([e.target, i]);
-      this.ns[e.target].adjacency.push([e.source, i]);
+  }
+
+  /**
+   * update this.nodes and this.edges used by d3.force
+   */
+  updateFilter() {
+    // TODO: apply filters
+    /*
+    this.snapshot.filters.forEach(filter => {
+      const component = filter.type == "edge" ? this.session.edges : this.session.nodes;
+      const workingCopy = filter.type == "edge" ? this.edges : this.nodes;
+      component.filter(e => {
+        if (filter.scale == "nominal") {
+          filter.key
+        } else {
+
+        }
+      });
     });
-    if (this.coords.length != 0) {
-      this.setAllCoords(this.coords);
-    }
+    */
+    this.fnodes = this.nodes;
+    this.fedges = this.edges;
+    // update adjacency
+    this.adjacency.splice(0);
+    this.nodes.forEach(e => {
+      this.adjacency.push([]);
+    });
+    this.fedges.forEach(e => {
+      this.adjacency[e.__source].push([e.__target, e]);
+      this.adjacency[e.__target].push([e.__source, e]);
+    });
+    // this.setAllCoords(this.coords);
   }
 
   setBoundary() {
-    const xs = this.ns.map(e => e.x);
-    const ys = this.ns.map(e => e.y);
+    const xs = [];
+    const ys = [];
+    this.fnodes.forEach(e => {
+      xs.push(e.x);
+      ys.push(e.y);
+    });
     this.boundary.top = Math.min.apply(null, ys);
     this.boundary.left = Math.min.apply(null, xs);
     this.boundary.bottom = Math.max.apply(null, ys);
@@ -148,50 +190,30 @@ export default class NetworkState extends TransformState {
   }
 
   setCoords(n, x, y) {
-    this.ns[n].x = x;
-    this.ns[n].y = y;
-    this.ns[n].adjacency.forEach(e => {
+    this.nodes[n].x = x;
+    this.nodes[n].y = y;
+    this.nodes[n].adjacency.forEach(e => {
       const nbr = e[0];
       const edge = e[1];
       if (n < nbr) {
-        this.es[edge].sx = x;
-        this.es[edge].sy = y;
+        this.edges[edge].sx = x;
+        this.edges[edge].sy = y;
       } else {
-        this.es[edge].tx = x;
-        this.es[edge].ty = y;
+        this.edges[edge].tx = x;
+        this.edges[edge].ty = y;
       }
     });
     this.setBoundary();
   }
 
-  nodesToRender() {
-    return this.ns.filter(
-      e => e.y > this.focusArea.top && e.x > this.focusArea.left
-        && e.y < this.focusArea.bottom && e.x < this.focusArea.right
-    );
+  updateVisibility() {
+    this.vnodes = this.fnodes; /*this.fnodes.filter(e => {
+      return e.y > this.focusArea.top && e.x > this.focusArea.left
+        && e.y < this.focusArea.bottom && e.x < this.focusArea.right;
+    });*/
+    this.vedges = this.fedges; /*this.fedges.filter(e => {
+      return this.vnodes.includes(e.__source) || this.vnodes.includes(e.__target);
+    });*/
   }
 
-  currentEdges() {
-    return this.es.filter(e => e[this.connThldField] >= this.currentConnThld);
-  }
-
-  edgesToRender() {
-    return this.currentEdges().filter(
-      e => this.focusArea.top < Math.max(e.sy, e.ty)
-        && this.focusArea.left < Math.max(e.sx, e.tx)
-        && this.focusArea.bottom > Math.min(e.sy, e.ty)
-        && this.focusArea.right > Math.min(e.sx, e.tx)
-    );
-  }
-
-  saveSnapshot(idb) {
-    this.coords = this.ns.map(n => ({x: n.x, y: n.y}));
-    return idb.updateItem(this.instance, item => {
-      item.snapshot[this.currentSnapshot] = this.session.snapshot
-    });
-  }
-
-  export() {
-    return this.session
-  }
 }

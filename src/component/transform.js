@@ -9,6 +9,11 @@ function transform(selection, tx, ty, tk) {
     .attr('transform', `translate(${tx}, ${ty}) scale(${tk})`);
 }
 
+function transform2(selection, state) {
+  const st = state.transform;
+  selection.select('.field')
+    .attr('transform', `translate(${st.x}, ${st.y}) scale(${st.k})`);
+}
 
 function resize(selection, state) {
   const area = selection.node();
@@ -25,9 +30,6 @@ function resize(selection, state) {
 
 
 function viewFrame(selection, state) {
-  selection
-    .style('width', '100%')
-    .style('height', '100%');
   selection.select('.view').remove(); // Clean up
   selection.append('svg')
     .classed('view', true);
@@ -39,9 +41,7 @@ function view(selection, state) {
   selection
     .attr('preserveAspectRatio', 'xMinYMin meet')
     .attr('pointer-events', 'all')
-    .attr('viewBox', `0 0 ${state.viewBox.right} ${state.viewBox.bottom}`)
-    .style('width', '100%')
-    .style('height', '100%');
+    .attr('viewBox', `0 0 ${state.viewBox.right} ${state.viewBox.bottom}`);
 
   // Clean up
   selection.selectAll('g, rect').remove();
@@ -67,5 +67,5 @@ function view(selection, state) {
 
 
 export default {
-  transform, resize, viewFrame, view
+  transform, transform2, resize, viewFrame, view
 };
