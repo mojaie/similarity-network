@@ -174,8 +174,8 @@ async function run() {
       .call(component.networkView, state)
       .call(force.activate, state)
       .call(interaction.setInteraction, state);
-  //d3.select('#control')
-  //    .call(control.controlBox, state);
+  d3.select('#control')
+      .call(control.controlBox, state);
 
   // Resize window
   window.onresize = () =>

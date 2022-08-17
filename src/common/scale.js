@@ -19,11 +19,11 @@ const scales = {
       unknown: '#f0f0f0'
     },
     green: {
-      range: ['#778899', '#7fff00'],
+      range: ['#778899', '#98fb98'],
       unknown: '#f0f0f0'
     },
-    red: {
-      range: ['#778899', '#fa8072'],
+    yellow: {
+      range: ['#778899', '#f0e68c'],
       unknown: '#f0f0f0'
     },
     category10: {
@@ -67,12 +67,33 @@ const scales = {
   }
 };
 
-const types = [
-  {key: 'linear', name: 'Linear', func: d3.scaleLinear},
-  {key: 'log', name: 'Log', func: d3.scaleLog},
-  {key: 'quantize', name: 'Quantize', func: d3.scaleQuantize},
-  {key: 'ordinal', name: 'Ordinal', func: d3.scaleOrdinal}
-];
+const colorScales = Object.keys(scales.color)
+  .map(e => {
+    const rcd = scales.color[e];
+    rcd.key = e;
+    return rcd;
+  });
+
+const nodeSizeScales = Object.keys(scales.nodeSize)
+  .map(e => {
+    const rcd = scales.nodeSize[e];
+    rcd.key = e;
+    return rcd;
+  });
+
+const edgeWidthScales = Object.keys(scales.edgeWidth)
+  .map(e => {
+    const rcd = scales.edgeWidth[e];
+    rcd.key = e;
+    return rcd;
+  });
+
+const types = {
+  linear: {name: 'Linear', func: d3.scaleLinear},
+  log: {name: 'Log', func: d3.scaleLog}
+  // {key: 'quantize', name: 'Quantize', func: d3.scaleQuantize},
+  // {key: 'ordinal', name: 'Ordinal', func: d3.scaleOrdinal}
+};
 
 
 function scaleFunction(params, rangeType) {
@@ -88,7 +109,7 @@ function scaleFunction(params, rangeType) {
     domain = params.domain;
   }
   // Build
-  let scaleFunc = types.find(e => e.key === params.scale).func();
+  let scaleFunc = types[params.scale].func();
   scaleFunc = scaleFunc.domain(domain);
   scaleFunc = scaleFunc.range(range);
   if (['linear', 'log'].includes(params.scale)) {
@@ -127,5 +148,5 @@ function isD3Format(notation) {
 
 
 export default {
-  scales, types, scaleFunction, isD3Format
+  scales, colorScales, nodeSizeScales, edgeWidthScales, types, scaleFunction, isD3Format
 };

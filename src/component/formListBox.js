@@ -3,6 +3,7 @@
 
 import d3 from 'd3';
 
+import {default as cscale} from '../common/scale.js';
 import {default as badge} from './badge.js';
 import {default as box} from './formBox.js';
 import {default as shape} from './shape.js';
@@ -14,39 +15,35 @@ import {default as shape} from './shape.js';
  */
 function selectBox(selection, label) {
   selection
-      .classed('form-group', true)
-      .classed('form-row', true)
-      .classed('align-items-center', true);
+      .classed('row', true);
   selection.append('label')
       .classed('col-form-label', true)
       .classed('col-form-label-sm', true)
       .classed('col-4', true)
       .text(label);
-  selection.append('select')
-      .classed('form-control', true)
-      .classed('form-control-sm', true)
+  selection.append('div')
       .classed('col-8', true)
-      .on('input', function () {
-        const valid = box.formValid(selection);
-        selection.call(box.setValidity, valid);
-      });
+    .append('select')
+      .classed('form-select', true)
+      .classed('form-select-sm', true);
 }
 
 function updateSelectBoxOptions(selection, items) {
   const options = selection.select('select')
     .selectAll('option')
-      .data(items, d => d.key);
+      .data(items);
   options.exit().remove();
   options.enter()
     .append('option')
-      .attr('value', d => d.key)
-      .text(d => d.name);
+      .attr('value', d => d)
+      .text(d => d);
 }
 
-function selectedRecord(selection) {
-  const value = box.formValue(selection);
-  return selection.selectAll('select option').data()
-      .find(e => e.key === value);
+function updateSelectBoxValue(selection, value) {
+  selection.select('.form-select').property('value', value);
+}
+function selectBoxValue(selection) {
+  return selection.select('.form-select').property('value');
 }
 
 
@@ -125,90 +122,86 @@ function setChecklistValidity(selection, valid) {
 
 function colorScaleBox(selection, label) {
   selection
-      .classed('form-group', true)
-      .classed('form-row', true)
-      .classed('align-items-center', true);
+      .classed('row', true);
   selection.append('label')
       .classed('col-form-label', true)
       .classed('col-form-label-sm', true)
       .classed('col-4', true)
-      .text(label || 'Colorscale');
+      .text(label);
   const form = selection.append('div')
+      .classed('col-8', true)
+    .append('div')
       .classed('form-control', true)
       .classed('form-control-sm', true)
-      .classed('col-8', true);
+      .classed('p-0', true);
   const dropdown = form.append('div')
       .classed('btn-group', true)
-      .classed('mr-1', true);
+      .classed('me-1', true);
   dropdown.append('button')
       .classed('btn', true)
       .classed(`btn-light`, true)
       .classed('btn-sm', true)
       .classed('dropdown-toggle', true)
-      .attr('data-toggle', 'dropdown');
-  dropdown.append('div')
+      .attr('data-bs-toggle', 'dropdown')
+      .attr('aria-expanded', 'false');
+  dropdown.append('ul')
       .classed('dropdown-menu', true)
       .classed('py-0', true);
   form.append('span')
       .classed('selected', true);
 }
 
-function colorScaleBoxItems(selection, items) {
+function updateColorScaleItems(selection, items) {
   const listitems = selection.select('.dropdown-menu')
-    .selectAll('a')
-      .data(items, d => d);
+    .selectAll('li')
+      .data(items);
   listitems.exit().remove();
   listitems.enter()
+    .append('li')
     .append('a')
       .classed('dropdown-item', true)
       .classed('py-0', true)
       .attr('href', '#')
-      .attr('title', d => d.key)
-      .on('click', function (d) {
+      .attr('title', d => d)
+      .on('click', (event, d) => {
         selection.call(setSelectedColorScale, d);
         selection.dispatch('change', {bubbles: true});
       })
-    .append('svg')
-      .each(function (d) {
-        d3.select(this)
-          .attr('viewBox', '0 0 100 10')
-          .attr('preserveAspectRatio', 'none')
-          .call(shape.colorBar[d.type], d.colors, d.text)
-          .call(shape.setSize, 100, 10);
+      .each((d, i, nodes) => {
+        const s = cscale.scales.color[d];
+        d3.select(nodes[i])
+            .call(shape.colorBar(s.range), s.range, 80, d);
       });
 }
 
 function setSelectedColorScale(selection, item) {
   const selected = selection.select('.selected');
+  const s = cscale.scales.color[item];
   selected.selectAll('svg').remove();
   selected.datum(item);  // Bind selected item record
-  selected.append('svg')
-      .attr('viewBox', '0 0 100 10')
-      .attr('preserveAspectRatio', 'none')
-      .call(shape.colorBar[item.type], item.colors, item.text)
-      .call(shape.setSize, 100, 10);
+  selected
+      .call(shape.colorBar(s.range), s.range, 80, item);
 }
 
-function updateColorScaleBox(selection, key) {
-  const data = selection.select('.dropdown-menu')
-    .selectAll('a').data();
-  const item = data.find(e => e.key === key);
+function updateColorScaleBox(selection, item) {
+  //const data = selection.select('.dropdown-menu')
+  //  .selectAll('li').data();
   selection.call(setSelectedColorScale, item);
 }
 
 function colorScaleBoxValue(selection) {
-  return selection.select('.selected').datum().key;
+  return selection.select('.selected').datum();
 }
 
 function colorScaleBoxItem(selection) {
-  return selection.select('.selected').datum();
+  return cscale.scales.color[selection.select('.selected').datum()];
 }
 
 
 export default {
-  selectBox, updateSelectBoxOptions, selectedRecord,
+  selectBox, updateSelectBoxOptions, updateSelectBoxValue, selectBoxValue,
   checklistBox, updateChecklistItems, checkRequired, updateChecklistValues,
   checklistValues, anyChecked, setChecklistValidity,
-  colorScaleBox, colorScaleBoxItems, updateColorScaleBox,
+  colorScaleBox, updateColorScaleItems, updateColorScaleBox,
   colorScaleBoxValue, colorScaleBoxItem
 };

@@ -217,27 +217,32 @@ function controlBoxFrame(selection, navID, contentID) {
 }
 
 
-function controlBoxNav(selection, id, label) {
+function controlBoxNav(selection, id, label, active) {
   selection
       .classed('nav-item', true)
+      .attr('role', 'presentation')
+    .append("button")
       .classed('nav-link', true)
+      .classed('active', active)
       .classed('py-1', true)
       .attr('id', `${id}-tab`)
-      .attr('data-toggle', 'tab')
-      .attr('href', `#${id}`)
+      .attr('data-bs-toggle', 'tab')
+      .attr('data-bs-target', `#${id}`)
+      .attr('type', 'button')
       .attr('role', 'tab')
       .attr('aria-controls', id)
-      .attr('aria-selected', 'false')
+      .attr('aria-selected', active ? "true" : "false")
       .text(label);
 }
 
 
-function controlBoxItem(selection, id) {
+function controlBoxItem(selection, id, active) {
   selection
       .classed('tab-pane', true)
       .classed('fade', true)
-      .classed('container', true)
       .classed('px-0', true)
+      .classed('show', active)
+      .classed('active', active)
       .attr('id', id)
       .attr('role', 'tabpanel')
       .attr('aria-labelledby', `${id}-tab`);

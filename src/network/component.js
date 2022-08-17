@@ -193,15 +193,13 @@ function networkView(selection, state) {
   state.updateAllNotifier = () => {
     state.updateFilter();
     state.updateVisibility();
-    //state.updateControlBoxNotifier();  // Update selectBox options
+    state.updateControlBoxNotifier();  // Update selectBox options
     state.setForceNotifier();
     state.updateComponentNotifier();
   };
   // Apply changes in nodes and edges displayed
   state.updateComponentNotifier = () => {
     // state.updateLegendNotifier();
-    // const coords = state.ns.map(e => ({x: e.x, y: e.y}));
-    // state.setAllCoords(coords);
     selection.call(updateComponents, state);
     state.updateInteractionNotifier();  // Apply drag events to each nodes
   };

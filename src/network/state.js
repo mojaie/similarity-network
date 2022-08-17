@@ -9,12 +9,22 @@ export default class NetworkState extends TransformState {
     super(1200, 1200, null);
     // Session properties
     this.sessionName = session.name;
+
     this.nodes = session.nodes;
+    this.nodeFields = [...this.nodes.reduce((a, b) => {
+      Object.keys(b).forEach(e => { a.add(e); })
+      return a;
+    }, new Set())]  // unique keys
     this.nodes.forEach((e, i) => {
       e.__index = i;  // internal id for d3.force
       e.__selected = false;  // for multiple selection
     })
+
     this.edges = session.edges;
+    this.edgeFields = [...this.edges.reduce((a, b) => {
+      Object.keys(b).forEach(e => { a.add(e); })
+      return a;
+    }, new Set())]  // unique keys
     this.edges.forEach((e, i) => {
       // internal id for d3.force
       e.__source = e.source;
@@ -83,8 +93,9 @@ export default class NetworkState extends TransformState {
       alwaysShowNodeImage: false,
       showEdgeThreshold: 500,
       alwaysShowEdge: false,
-      legendOrientation: 'top-left',
-      forceParam: 'aggregate'
+      legendOrient: 'none',
+      showEdgeLegend: 'none',
+      forceParam: 'dense'
     };
     this.appearance = snapshot.hasOwnProperty("appearance") ? snapshot.appearance : {
       nodeColor: {

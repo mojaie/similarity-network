@@ -120,16 +120,13 @@ function textareaValid(selection) {
 
 function checkBox(selection, label) {
   const box = selection
-      .classed('form-group', true)
-      .classed('form-row', true)
       .classed('form-check', true)
-    .append('label')
-      .classed('form-check-label', true)
-      .classed('col-form-label-sm', true);
   box.append('input')
       .classed('form-check-input', true)
       .attr('type', 'checkbox');
-  box.append('span')
+  box.append('label')
+      .classed('form-check-label', true)
+      .classed('small', true)
       .text(label);
 }
 
@@ -144,17 +141,17 @@ function checkBoxValue(selection) {
 
 function numberBox(selection, label) {
   selection
-      .classed('form-group', true)
-      .classed('form-row', true);
+      .classed('row', true);
   selection.append('label')
       .classed('col-form-label', true)
       .classed('col-form-label-sm', true)
       .classed('col-4', true)
       .text(label);
-  selection.append('input')
+  selection.append('div')
+      .classed('col-8', true)
+    .append('input')
       .classed('form-control', true)
       .classed('form-control-sm', true)
-      .classed('col-8', true)
       .attr('type', 'number')
       .on('input', function () {
         const valid = formValid(selection);

@@ -412,8 +412,8 @@ var app = (function (d3, _, pako) {
     downloadDataFile, downloadJSON
   };
 
-  const assetBaseURL = '../assets/';
-  const iconBaseURL$1 = '../assets/icon/';
+  const assetBaseURL = './asset/';
+  const iconBaseURL$1 = './asset/icon/';
 
 
   function badge(selection) {
@@ -671,11 +671,11 @@ var app = (function (d3, _, pako) {
         unknown: '#f0f0f0'
       },
       green: {
-        range: ['#778899', '#7fff00'],
+        range: ['#778899', '#98fb98'],
         unknown: '#f0f0f0'
       },
-      red: {
-        range: ['#778899', '#fa8072'],
+      yellow: {
+        range: ['#778899', '#f0e68c'],
         unknown: '#f0f0f0'
       },
       category10: {
@@ -719,12 +719,33 @@ var app = (function (d3, _, pako) {
     }
   };
 
-  const types = [
-    {key: 'linear', name: 'Linear', func: d3__default["default"].scaleLinear},
-    {key: 'log', name: 'Log', func: d3__default["default"].scaleLog},
-    {key: 'quantize', name: 'Quantize', func: d3__default["default"].scaleQuantize},
-    {key: 'ordinal', name: 'Ordinal', func: d3__default["default"].scaleOrdinal}
-  ];
+  const colorScales = Object.keys(scales.color)
+    .map(e => {
+      const rcd = scales.color[e];
+      rcd.key = e;
+      return rcd;
+    });
+
+  const nodeSizeScales = Object.keys(scales.nodeSize)
+    .map(e => {
+      const rcd = scales.nodeSize[e];
+      rcd.key = e;
+      return rcd;
+    });
+
+  const edgeWidthScales = Object.keys(scales.edgeWidth)
+    .map(e => {
+      const rcd = scales.edgeWidth[e];
+      rcd.key = e;
+      return rcd;
+    });
+
+  const types = {
+    linear: {name: 'Linear', func: d3__default["default"].scaleLinear},
+    log: {name: 'Log', func: d3__default["default"].scaleLog}
+    // {key: 'quantize', name: 'Quantize', func: d3.scaleQuantize},
+    // {key: 'ordinal', name: 'Ordinal', func: d3.scaleOrdinal}
+  };
 
 
   function scaleFunction(params, rangeType) {
@@ -740,7 +761,7 @@ var app = (function (d3, _, pako) {
       domain = params.domain;
     }
     // Build
-    let scaleFunc = types.find(e => e.key === params.scale).func();
+    let scaleFunc = types[params.scale].func();
     scaleFunc = scaleFunc.domain(domain);
     scaleFunc = scaleFunc.range(range);
     if (['linear', 'log'].includes(params.scale)) {
@@ -779,26 +800,26 @@ var app = (function (d3, _, pako) {
 
 
   var cscale = {
-    scales, types, scaleFunction, isD3Format
+    scales, colorScales, nodeSizeScales, edgeWidthScales, types, scaleFunction, isD3Format
   };
 
-  function monocolorBar(selection, colors, text) {
-    const group = selection.append('g');
-    group.append('rect')
+  function monocolorBar(selection, colors, length, tooltip) {
+    selection.append('svg')
+        .attr('width', length)
+        .attr('viewBox', `0 0 ${length} 10`)
+        .attr('preserveAspectRatio', 'none')
+      .append('g')
+        .attr("title", tooltip)
+      .append('rect')
         .attr('x', 0).attr('y', 0)
-        .attr('width', 100).attr('height', 10)
+        .attr('width', length).attr('height', 10)
         .attr('fill', colors[0]);
-    group.append('text')
-        .attr('text-anchor', 'middle')
-        .attr('x', 50).attr('y', 10)
-        .attr('font-size', 12)
-        .text(text);
   }
 
-  function bicolorBar(selection, colors, text) {
+  function bicolorBar(selection, colors, length, tooltip) {
     const id = misc.uuidv4().slice(0, 8);  // Aboid inline SVG ID dupulicate
-    selection.call(monocolorBar, colors, text);
-    const grad = selection.append('defs')
+    selection.call(monocolorBar, colors, length, tooltip);
+    const grad = selection.select("svg").append('defs')
       .append('linearGradient')
         .attr('id', id);
     grad.append('stop')
@@ -809,36 +830,20 @@ var app = (function (d3, _, pako) {
         .attr('fill', `url(#${id})`);
   }
 
-  function tricolorBar(selection, colors, text) {
-    const id = misc.uuidv4().slice(0, 8);  // Aboid inline SVG ID dupulicate
-    selection.call(monocolorBar, colors, text);
-    const grad = selection.append('defs')
-      .append('linearGradient')
-        .attr('id', id);
-    grad.append('stop')
-      .attr('offset', 0).attr('stop-color', colors[0]);
-    grad.append('stop')
-      .attr('offset', 0.5).attr('stop-color', colors[1]);
-    grad.append('stop')
-      .attr('offset', 1).attr('stop-color', colors[2]);
-    selection.select('rect')
-        .attr('fill', `url(#${id})`);
-  }
-
-  function categoricalBar(selection, colors, text) {
-    const sw = 100 / colors.length;
-    const group = selection.append('g');
+  function categoricalBar(selection, colors, length, tooltip) {
+    const group = selection.append('svg')
+        .attr('width', length)
+        .attr('viewBox', `0 0 ${length} 10`)
+        .attr('preserveAspectRatio', 'none')
+      .append('g')
+        .attr("title", tooltip);
+    const sw = length / colors.length;
     colors.forEach((e, i) => {
       group.append('rect')
           .attr('x', sw * i).attr('y', 0)
           .attr('width', sw).attr('height', 10)
           .attr('fill', colors[i]);
     });
-    group.append('text')
-        .attr('text-anchor', 'middle')
-        .attr('x', 50).attr('y', 10)
-        .attr('font-size', 12)
-        .text(text);
   }
 
   function setSize(selection, width, height) {
@@ -846,14 +851,11 @@ var app = (function (d3, _, pako) {
   }
 
 
-  const colorBar = {
-    'monocolor': monocolorBar,
-    'bicolor': bicolorBar,
-    'tricolor': tricolorBar,
-    'categorical': categoricalBar,
-    'custom': monocolorBar
-  };
-
+  function colorBar(range) {
+    if (range.length == 1) return monocolorBar;
+    if (range.length == 2) return bicolorBar;
+    return categoricalBar;
+  }
 
   var shape = {
     colorBar, setSize
@@ -1110,16 +1112,13 @@ var app = (function (d3, _, pako) {
 
   function checkBox(selection, label) {
     const box = selection
-        .classed('form-group', true)
-        .classed('form-row', true)
-        .classed('form-check', true)
-      .append('label')
-        .classed('form-check-label', true)
-        .classed('col-form-label-sm', true);
+        .classed('form-check', true);
     box.append('input')
         .classed('form-check-input', true)
         .attr('type', 'checkbox');
-    box.append('span')
+    box.append('label')
+        .classed('form-check-label', true)
+        .classed('small', true)
         .text(label);
   }
 
@@ -1134,17 +1133,17 @@ var app = (function (d3, _, pako) {
 
   function numberBox(selection, label) {
     selection
-        .classed('form-group', true)
-        .classed('form-row', true);
+        .classed('row', true);
     selection.append('label')
         .classed('col-form-label', true)
         .classed('col-form-label-sm', true)
         .classed('col-4', true)
         .text(label);
-    selection.append('input')
+    selection.append('div')
+        .classed('col-8', true)
+      .append('input')
         .classed('form-control', true)
         .classed('form-control-sm', true)
-        .classed('col-8', true)
         .attr('type', 'number')
         .on('input', function () {
           const valid = formValid(selection);
@@ -1486,12 +1485,22 @@ var app = (function (d3, _, pako) {
       super(1200, 1200, null);
       // Session properties
       this.sessionName = session.name;
+
       this.nodes = session.nodes;
+      this.nodeFields = [...this.nodes.reduce((a, b) => {
+        Object.keys(b).forEach(e => { a.add(e); });
+        return a;
+      }, new Set())];  // unique keys
       this.nodes.forEach((e, i) => {
         e.__index = i;  // internal id for d3.force
         e.__selected = false;  // for multiple selection
       });
+
       this.edges = session.edges;
+      this.edgeFields = [...this.edges.reduce((a, b) => {
+        Object.keys(b).forEach(e => { a.add(e); });
+        return a;
+      }, new Set())];  // unique keys
       this.edges.forEach((e, i) => {
         // internal id for d3.force
         e.__source = e.source;
@@ -1560,8 +1569,9 @@ var app = (function (d3, _, pako) {
         alwaysShowNodeImage: false,
         showEdgeThreshold: 500,
         alwaysShowEdge: false,
-        legendOrientation: 'top-left',
-        forceParam: 'aggregate'
+        legendOrient: 'none',
+        showEdgeLegend: 'none',
+        forceParam: 'dense'
       };
       this.appearance = snapshot.hasOwnProperty("appearance") ? snapshot.appearance : {
         nodeColor: {
@@ -1694,6 +1704,823 @@ var app = (function (d3, _, pako) {
     }
 
   }
+
+  /**
+   * Render select box components
+   * @param {d3.selection} selection - selection of box container (div element)
+   */
+  function selectBox(selection, label) {
+    selection
+        .classed('row', true);
+    selection.append('label')
+        .classed('col-form-label', true)
+        .classed('col-form-label-sm', true)
+        .classed('col-4', true)
+        .text(label);
+    selection.append('div')
+        .classed('col-8', true)
+      .append('select')
+        .classed('form-select', true)
+        .classed('form-select-sm', true);
+  }
+
+  function updateSelectBoxOptions(selection, items) {
+    const options = selection.select('select')
+      .selectAll('option')
+        .data(items);
+    options.exit().remove();
+    options.enter()
+      .append('option')
+        .attr('value', d => d)
+        .text(d => d);
+  }
+
+  function updateSelectBoxValue(selection, value) {
+    selection.select('.form-select').property('value', value);
+  }
+  function selectBoxValue(selection) {
+    return selection.select('.form-select').property('value');
+  }
+
+
+  /**
+   * Render select box components
+   * @param {d3.selection} selection - selection of box container (div element)
+   */
+  function checklistBox(selection, label) {
+    // TODO: scroll
+    selection
+        .classed('form-group', true)
+        .classed('form-row', true)
+        .classed('align-items-center', true);
+    const formLabel = selection.append('label')
+        .classed('col-form-label', true)
+        .classed('col-form-label-sm', true)
+        .classed('col-4', true)
+        .text(label);
+    formLabel.append('div')
+        .call(badge$1.invalidFeedback);
+    selection.append('ul')
+        .classed('form-control', true)
+        .classed('form-control-sm', true)
+        .classed('col-8', true);
+  }
+
+  function updateChecklistItems(selection, items) {
+    const listitems = selection.select('ul')
+      .selectAll('li')
+        .data(items, d => d.key);
+    listitems.exit().remove();
+    const form = listitems.enter()
+      .append('li')
+        .attr('class', 'form-check')
+      .append('label')
+        .attr('class', 'form-check-label');
+    form.append('input')
+        .attr('type', 'checkbox')
+        .attr('class', 'form-check-input')
+        .property('value', d => d.key);
+    form.append('span')
+        .text(d => d.name);
+  }
+
+  function checkRequired(selection) {
+    selection.selectAll('input')
+        .on('change', function () {
+          const valid = anyChecked(selection);
+          selection.call(setChecklistValidity, valid);
+        });
+  }
+
+  function updateChecklistValues(selection, values) {
+    selection.selectAll('input')
+      .each(function (d) {
+        d3__default["default"].select(this).property('checked', values.includes(d.key));
+      });
+    selection.call(setChecklistValidity, true);  // Clear validity state
+  }
+
+  function checklistValues(selection) {
+    return selection.selectAll('input:checked').data().map(d => d.key);
+  }
+
+  function anyChecked(selection) {
+    return checklistValues(selection).length > 0;
+  }
+
+  function setChecklistValidity(selection, valid) {
+    selection.select('.invalid-feedback')
+        .style('display', valid ? 'none': 'inherit');
+    selection.select('.form-control')
+        .style('background-color', valid ? null : 'LightPink');
+  }
+
+
+  function colorScaleBox(selection, label) {
+    selection
+        .classed('row', true);
+    selection.append('label')
+        .classed('col-form-label', true)
+        .classed('col-form-label-sm', true)
+        .classed('col-4', true)
+        .text(label);
+    const form = selection.append('div')
+        .classed('col-8', true)
+      .append('div')
+        .classed('form-control', true)
+        .classed('form-control-sm', true)
+        .classed('p-0', true);
+    const dropdown = form.append('div')
+        .classed('btn-group', true)
+        .classed('me-1', true);
+    dropdown.append('button')
+        .classed('btn', true)
+        .classed(`btn-light`, true)
+        .classed('btn-sm', true)
+        .classed('dropdown-toggle', true)
+        .attr('data-bs-toggle', 'dropdown')
+        .attr('aria-expanded', 'false');
+    dropdown.append('ul')
+        .classed('dropdown-menu', true)
+        .classed('py-0', true);
+    form.append('span')
+        .classed('selected', true);
+  }
+
+  function updateColorScaleItems(selection, items) {
+    const listitems = selection.select('.dropdown-menu')
+      .selectAll('li')
+        .data(items);
+    listitems.exit().remove();
+    listitems.enter()
+      .append('li')
+      .append('a')
+        .classed('dropdown-item', true)
+        .classed('py-0', true)
+        .attr('href', '#')
+        .attr('title', d => d)
+        .on('click', (event, d) => {
+          selection.call(setSelectedColorScale, d);
+          selection.dispatch('change', {bubbles: true});
+        })
+        .each((d, i, nodes) => {
+          const s = cscale.scales.color[d];
+          d3__default["default"].select(nodes[i])
+              .call(shape.colorBar(s.range), s.range, 80, d);
+        });
+  }
+
+  function setSelectedColorScale(selection, item) {
+    const selected = selection.select('.selected');
+    const s = cscale.scales.color[item];
+    selected.selectAll('svg').remove();
+    selected.datum(item);  // Bind selected item record
+    selected
+        .call(shape.colorBar(s.range), s.range, 80, item);
+  }
+
+  function updateColorScaleBox(selection, item) {
+    //const data = selection.select('.dropdown-menu')
+    //  .selectAll('li').data();
+    selection.call(setSelectedColorScale, item);
+  }
+
+  function colorScaleBoxValue(selection) {
+    return selection.select('.selected').datum();
+  }
+
+  function colorScaleBoxItem(selection) {
+    return cscale.scales.color[selection.select('.selected').datum()];
+  }
+
+
+  var lbox = {
+    selectBox, updateSelectBoxOptions, updateSelectBoxValue, selectBoxValue,
+    checklistBox, updateChecklistItems, checkRequired, updateChecklistValues,
+    checklistValues, anyChecked, setChecklistValidity,
+    colorScaleBox, updateColorScaleItems, updateColorScaleBox,
+    colorScaleBoxValue, colorScaleBoxItem
+  };
+
+  /**
+   * Render range box components
+   * @param {d3.selection} selection - selection of box container (div element)
+   */
+  function rangeBox(selection, label) {
+    selection
+        .classed('form-row', true)
+        .classed('form-group', true)
+        .classed('align-items-center', true)
+      .append('div')
+        .classed('col-form-label', true)
+        .classed('col-form-label-sm', true)
+        .text(label);
+
+    const minBox = selection.append('div');
+    minBox.append('label').text('min');
+    minBox.append('input').classed('min', true);
+
+    const maxBox = selection.append('div');
+    maxBox.append('label').text('max');
+    maxBox.append('input').classed('max', true);
+
+    selection.selectAll('div')
+        .classed('form-group', true)
+        .classed('col-4', true)
+        .classed('mb-0', true);
+
+    selection.selectAll('label')
+        .classed('col-form-label', true)
+        .classed('col-form-label-sm', true)
+        .classed('py-0', true);
+
+    selection.selectAll('input')
+        .classed('form-control', true)
+        .classed('form-control-sm', true)
+        .attr('type', 'number');
+
+    selection.append('div')
+        .classed('col-4', true);
+    selection.append('div')
+        .call(badge$1.invalidFeedback)
+        .classed('col-8', true);
+  }
+
+
+  function linearRange(selection, min, max, step) {
+    selection.selectAll('.min, .max')
+        .attr('min', min || null)
+        .attr('max', max || null)
+        .attr('step', step || null)
+        .attr('required', 'required')
+        .on('input', function () {
+          const valid = linearValid(this, step);
+          d3__default["default"].select(this)
+            .style('background-color', valid ? null : '#ffcccc');
+          selection.select('.invalid-feedback')
+            .style('display', linearRangeValid(selection) ? 'none': 'inherit');
+        })
+        .dispatch('input');
+  }
+
+
+  function logRange(selection) {
+    selection.selectAll('.min, .max')
+        .attr('required', 'required')
+        .on('input', function () {
+          const valid = logValid(this);
+          d3__default["default"].select(this)
+            .style('background-color', valid ? null : '#ffcccc');
+          selection.select('.invalid-feedback')
+            .style('display', logRangeValid(selection) ? 'none': 'inherit');
+        })
+        .dispatch('input');
+  }
+
+
+  function updateRangeValues(selection, range) {
+    selection.select('.min').property('value', range[0]);
+    selection.select('.max').property('value', range[1]);
+    selection.selectAll('.min,.max')
+        .dispatch('input', {bubbles: true});
+  }
+
+
+  function linearValid(node, step) {
+    // If step is not specified, accept stepMismatch
+    const stepm = step ? false : node.validity.stepMismatch;
+    return  node.checkValidity() || stepm;
+  }
+
+
+  function linearRangeValid(selection) {
+    const step = selection.select('.min').attr('step');
+    const minValid = linearValid(selection.select('.min').node(), step);
+    const maxValid = linearValid(selection.select('.max').node(), step);
+    return minValid && maxValid;
+  }
+
+
+  function logValid(node) {
+    // Accept stepMismatch
+    const stepm = node.validity.stepMismatch;
+    return (node.checkValidity() || stepm) && node.value > 0;
+  }
+
+
+  function logRangeValid(selection) {
+    const minPos = logValid(selection.select('.min').node());
+    const maxPos = logValid(selection.select('.max').node());
+    return linearRangeValid(selection) && minPos && maxPos;
+  }
+
+
+  function rangeValues(selection) {
+    return [
+      selection.select('.min').property('value'),
+      selection.select('.max').property('value')
+    ];
+  }
+
+
+  /**
+   * Render color scale box components
+   * @param {d3.selection} selection - selection of box container (div element)
+   */
+  function colorRangeBox(selection, label) {
+    selection
+        .classed('form-row', true)
+        .classed('form-group', true)
+        .classed('align-items-center', true);
+    selection.append('div')
+        .classed('col-form-label', true)
+        .classed('col-form-label-sm', true)
+        .text(label);
+
+    const minBox = selection.append('div');
+    minBox.append('label').text('min');
+    minBox.append('input').classed('min', true);
+
+    const midBox = selection.append('div');
+    midBox.append('label').text('mid');
+    midBox.append('input').classed('mid', true);
+
+    const maxBox = selection.append('div');
+    maxBox.append('label').text('max');
+    maxBox.append('input').classed('max', true);
+
+    selection.on('change', () => {
+      // avoid update by mousemove on the colorpicker
+      d3__default["default"].event.stopPropagation();
+    });
+
+    selection.selectAll('div')
+        .classed('form-group', true)
+        .classed('col-3', true)
+        .classed('mb-0', true);
+
+    selection.selectAll('label')
+        .classed('col-form-label', true)
+        .classed('col-form-label-sm', true)
+        .classed('py-0', true);
+
+    selection.selectAll('input')
+        .classed('form-control', true)
+        .classed('form-control-sm', true)
+        .attr('type', 'color');
+  }
+
+
+  function updateColorRangeValues(selection, range) {
+    selection.select('.min').property('value', range[0]);
+    selection.select('.mid').property('value', range[1]);
+    selection.select('.max').property('value', range[2]);
+  }
+
+
+  function colorRangeValues(selection) {
+    return [
+      selection.select('.min').property('value'),
+      selection.select('.mid').property('value'),
+      selection.select('.max').property('value')
+    ];
+  }
+
+
+  var rbox = {
+    rangeBox, linearRange, logRange, updateRangeValues,
+    rangeValues, linearRangeValid, logRangeValid,
+    colorRangeBox, updateColorRangeValues, colorRangeValues
+  };
+
+  function dropdownFormGroup(selection, label) {
+    const id = misc.uuidv4().slice(0, 8);
+    selection.classed('mb-3', true)
+      .append('div')
+        .classed('form-group', true)
+        .classed('form-row', true)
+        .classed('justify-content-end', true)
+      .append('button')
+        .classed('btn', true)
+        .classed('btn-sm', true)
+        .classed('btn-outline-primary', true)
+        .classed('dropdown-toggle', true)
+        .attr('data-toggle', 'collapse')
+        .attr('data-target', `#${id}-collapse`)
+        .attr('aria-expanded', 'false')
+        .attr('aria-controls', `${id}-collapse`)
+        .text(label);
+    selection.append('div')
+        .classed('collapse', true)
+        .attr('id', `${id}-collapse`)
+      .append('div')
+        .classed('card', true)
+        .classed('card-body', true);
+  }
+
+
+  var dropdown = {
+    dropdownFormGroup
+  };
+
+  /**
+   * Render color range control box group
+   * @param {d3.selection} selection - selection of box container (div element)
+   */
+  function colorRangeGroup(selection, colorScales) {
+    selection
+        .classed('mb-3', true);
+    selection.append('div')
+        .classed('colorscale', true)
+        .classed('mb-2', true)
+        .call(lbox.colorScaleBox, 'Colorscale')
+        .call(lbox.colorScaleBoxItems, colorScales);
+
+    // Custom colorscale
+    const collapse = selection.append('div')
+        .call(dropdown.dropdownFormGroup, 'Custom color')
+      .select('.card-body')
+        .classed('p-2', true);
+
+    const customColorRanges = [
+      {key: 'continuous', name: 'Continuous'},
+      {key: 'two-piece', name: 'Two-piece'}
+    ];
+    collapse.append('div')
+        .classed('rangetype', true)
+        .classed('mb-1', true)
+        .call(lbox.selectBox, 'Range type')
+        .call(lbox.updateSelectBoxOptions, customColorRanges);
+    collapse.append('div')
+        .classed('range', true)
+        .classed('mb-1', true)
+        .call(rbox.colorRangeBox, 'Range');
+    collapse.append('div')
+        .classed('unknown', true)
+        .classed('mb-1', true)
+        .call(box.colorBox, 'Unknown');
+  }
+
+
+  function updateColorRangeGroup(selection, cscale, range, unknown) {
+    const customRange = () => {
+      const cs = lbox.colorScaleBoxValue(selection.select('.colorscale'));
+      const rg = box.formValue(selection.select('.rangetype'));
+      const customScale = cs === 'custom';
+      selection.selectAll('.rangetype, .range, .unknown')
+          .selectAll('select, input')
+          .property('disabled', !customScale);
+      selection.select('.range').select('.mid')
+          .property('disabled', !customScale || rg === 'continuous');
+    };
+    selection.select('.colorscale')
+        .call(lbox.updateColorScaleBox, cscale)
+        .on('change', function () {
+          customRange();
+        });
+    const rtype = range.length === 2 ? 'continuous' : 'two-piece';
+    selection.select('.rangetype')
+        .call(box.updateFormValue, rtype)
+        .on('change', function () {
+          customRange();
+        })
+        .dispatch('change');
+    const rboxValues = range.length === 2  ? [range[0], null, range[1]] : range;
+    selection.select('.range')
+        .call(rbox.updateColorRangeValues, rboxValues)
+        .on('focusin', () => {
+          selection.dispatch('change', {bubbles: true});
+        });
+    selection.select('.unknown')
+        .call(box.updateFormValue, unknown)
+        .on('focusin', () => {
+          selection.dispatch('change', {bubbles: true});
+        });
+  }
+
+
+  function colorGroupValues(selection) {
+    const colorScale = lbox.colorScaleBoxItem(selection.select('.colorscale'));
+    const rtype = box.formValue(selection.select('.rangetype'));
+    const range = rbox.colorRangeValues(selection.select('.range'));
+    const unknown = box.formValue(selection.select('.unknown'));
+    return {
+      color: colorScale.key,
+      colorScaleType: colorScale.type,
+      range: rtype === 'continuous' ? [range[0], range[2]] : range,
+      unknown: unknown
+    };
+  }
+
+
+  /**
+   * Render scale and domain control box group
+   * @param {d3.selection} selection - selection of box container (div element)
+   */
+  function scaleBoxGroup(selection) {
+    selection.classed('mb-3', true);
+
+    // Scale type
+    const scaleOptions = [
+      {key: 'linear', name: 'Linear'},
+      {key: 'log', name: 'Log'}
+    ];
+    selection.append('div')
+        .classed('scale', true)
+        .classed('mb-1', true)
+        .call(lbox.selectBox, 'Scale')
+        .call(lbox.updateSelectBoxOptions, scaleOptions)
+        .on('change', function () {
+          const isLog = box.formValue(d3__default["default"].select(this)) === 'log';
+          selection.select('.domain')
+            .call(isLog ? rbox.logRange : rbox.linearRange)
+            .call(badge$1.updateInvalidMessage,
+                  isLog ? 'Please provide a valid range (larger than 0)'
+                  : 'Please provide a valid number');
+        });
+    selection.append('div')
+        .classed('domain', true)
+        .classed('mb-1', true)
+        .call(rbox.rangeBox, 'Domain');
+  }
+
+
+  function updateScaleBoxGroup(selection, scale, domain) {
+    selection.select('.scale')
+        .call(box.updateFormValue, scale)
+        .dispatch('change');
+    selection.select('.domain')
+        .call(rbox.updateRangeValues, domain);
+  }
+
+
+  function scaleBoxGroupValid(selection) {
+    const isLog = box.formValue(selection.select('.scale')) === 'log';
+    const dm = selection.select('.domain');
+    return isLog ? rbox.logRangeValid(dm) : rbox.linearRangeValid(dm);
+  }
+
+
+  function scaleGroupValues(selection) {
+    const scale = box.formValue(selection.select('.scale'));
+    const domain = rbox.rangeValues(selection.select('.domain'));
+    return {
+      scale: scale || 'linear',
+      domain: domain
+    };
+  }
+
+
+  var group = {
+    colorRangeGroup, updateColorRangeGroup, colorGroupValues,
+    scaleBoxGroup, updateScaleBoxGroup, scaleGroupValues, scaleBoxGroupValid
+  };
+
+  function colorControlBox(selection, colorScales, fieldName) {
+    // Color field
+    selection.append('div')
+        .classed('field', true)
+        .call(lbox.selectBox, fieldName || 'Field');
+
+    // Colorscale and custom range
+    selection.append('div')
+        .classed('range', true)
+        .call(group.colorRangeGroup, colorScales)
+        .on('change', function () {
+          const values = group.colorGroupValues(d3__default["default"].select(this));
+          const noScale = ['categorical', 'monocolor']
+            .includes(values.colorScaleType);
+          selection.select('.scale').selectAll('select,input')
+              .property('disabled', noScale);
+        });
+
+    // Scale
+    selection.append('div')
+        .classed('scale', true)
+        .call(group.scaleBoxGroup);
+
+    // Legend
+    selection.append('div')
+        .classed('legend', true)
+        .call(box.checkBox, 'Show legend');
+  }
+
+
+  function updateColorControl(selection, fieldOptions, colorState) {
+    selection.select('.field')
+        .call(lbox.updateSelectBoxOptions, fieldOptions)
+        .call(box.updateFormValue, colorState.field);
+    selection.select('.range')
+        .call(group.updateColorRangeGroup, colorState.color,
+              colorState.range, colorState.unknown);
+    selection.select('.scale')
+        .call(group.updateScaleBoxGroup, colorState.scale, colorState.domain)
+        .dispatch('change');
+    selection.select('.legend')
+        .call(box.updateCheckBox, colorState.legend);
+  }
+
+
+  function colorControlValid(selection) {
+    return group.scaleBoxGroupValid(selection.select('.scale'));
+  }
+
+
+  function colorControlState(selection) {
+    const range = group.colorGroupValues(selection.select('.range'));
+    const scale = group.scaleGroupValues(selection.select('.scale'));
+    return {
+      field: box.formValue(selection.select('.field')),
+      color: range.color,
+      range: range.range,
+      unknown: range.unknown,
+      scale: range.colorScaleType === 'categorical' ? 'ordinal': scale.scale,
+      domain: scale.domain,
+      legend: box.checkBoxValue(selection.select('.legend'))
+    };
+  }
+
+
+  function sizeControlBox(selection, fieldName) {
+    // Size field
+    selection.append('div')
+        .classed('field', true)
+        .call(lbox.selectBox, fieldName || 'Field');
+
+    // Size range
+    selection.append('div')
+        .classed('range', true)
+        .classed('mb-2', true)
+        .call(rbox.rangeBox, 'Range')
+        .call(rbox.linearRange, 0.1, 999, 0.1)
+        .call(badge$1.updateInvalidMessage,
+              'Please provide a valid range (0.1-999)');
+
+    // Size unknown
+    selection.append('div')
+        .classed('unknown', true)
+        .call(box.numberBox, 'Unknown')
+        .call(box.updateNumberRange, 0.1, 999, 0.1)
+        .call(badge$1.updateInvalidMessage,
+              'Please provide a valid number (0.1-999)')
+      .select('input')
+        .classed('col-8', false)
+        .classed('col-3', true);
+
+    // Size scale
+    selection.append('div')
+        .classed('scale', true)
+        .call(group.scaleBoxGroup);
+  }
+
+
+  function updateSizeControl(selection, fieldOptions, sizeState) {
+    selection.select('.field')
+        .call(lbox.updateSelectBoxOptions, fieldOptions)
+        .call(box.updateFormValue, sizeState.field);
+    selection.select('.range')
+        .call(rbox.updateRangeValues, sizeState.range);
+    selection.select('.unknown')
+        .call(box.updateFormValue, sizeState.unknown);
+    selection.select('.scale')
+        .call(group.updateScaleBoxGroup, sizeState.scale, sizeState.domain);
+  }
+
+
+  function sizeControlValid(selection) {
+    const rangeValid = rbox.linearRangeValid(selection.select('.range'));
+    const unkValid = box.formValid(selection.select('.unknown'));
+    const scaleValid = group.scaleBoxGroupValid(selection.select('.scale'));
+    return rangeValid && unkValid && scaleValid;
+  }
+
+
+  function sizeControlState(selection) {
+    const scale = group.scaleGroupValues(selection.select('.scale'));
+    return {
+      field: box.formValue(selection.select('.field')),
+      range: rbox.rangeValues(selection.select('.range')),
+      unknown: box.formValue(selection.select('.unknown')),
+      scale: scale.scale,
+      domain: scale.domain
+    };
+  }
+
+
+  function labelControlBox(selection, colorScales) {
+    // nodeLabel.visible
+    selection.append('div')
+      .append('div')
+        .classed('visible', true)
+        .call(box.checkBox, 'Show labels');
+
+    // nodeLabel
+    const labelGroup = selection.append('div')
+        .classed('mb-3', true);
+    labelGroup.append('div')
+        .classed('text', true)
+        .classed('mb-1', true)
+        .call(lbox.selectBox, 'Text field');
+    labelGroup.append('div')
+        .classed('size', true)
+        .classed('mb-1', true)
+        .call(box.numberBox, 'Font size')
+        .call(box.updateNumberRange, 0.1, 999, 0.1)
+        .call(badge$1.updateInvalidMessage,
+              'Please provide a valid number (0.1-999)')
+      .select('.form-control')
+        .attr('required', 'required');
+
+    // nodeLabelColor
+    selection.call(colorControlBox, colorScales, 'Color field');
+    // TODO: not implemented yet
+    selection.select('.legend input').property('disabled', true);
+  }
+
+
+  function updateLabelControl(selection, fieldOptions,
+                                 labelState, colorState) {
+    selection.select('.visible')
+        .call(box.updateCheckBox, labelState.visible);
+    selection.select('.text')
+        .call(lbox.updateSelectBoxOptions, fieldOptions)
+        .call(box.updateFormValue, labelState.field);
+    selection.select('.size')
+        .call(box.updateFormValue, labelState.size);
+    selection.call(updateColorControl, fieldOptions, colorState);
+  }
+
+
+  function labelControlValid(selection) {
+    const fontValid = box.formValid(selection.select('.size'));
+    return fontValid && colorControlValid(selection);
+  }
+
+
+  function labelControlState(selection) {
+    return {
+      label: {
+        field: box.formValue(selection.select('.text')),
+        size: box.formValue(selection.select('.size')),
+        visible: box.checkBoxValue(selection.select('.visible'))
+      },
+      labelColor: colorControlState(selection)
+    };
+  }
+
+
+  function controlBoxFrame(selection, navID, contentID) {
+    selection.append('nav')
+      .append('div')
+        .classed('nav', true)
+        .classed('nav-tabs', true)
+        .attr('id', navID)
+        .attr('role', 'tablist');
+    selection.append('div')
+        .classed('tab-content', true)
+        .classed('p-2', true)
+        .attr('id', contentID);
+  }
+
+
+  function controlBoxNav(selection, id, label, active) {
+    selection
+        .classed('nav-item', true)
+        .attr('role', 'presentation')
+      .append("button")
+        .classed('nav-link', true)
+        .classed('active', active)
+        .classed('py-1', true)
+        .attr('id', `${id}-tab`)
+        .attr('data-bs-toggle', 'tab')
+        .attr('data-bs-target', `#${id}`)
+        .attr('type', 'button')
+        .attr('role', 'tab')
+        .attr('aria-controls', id)
+        .attr('aria-selected', active ? "true" : "false")
+        .text(label);
+  }
+
+
+  function controlBoxItem(selection, id, active) {
+    selection
+        .classed('tab-pane', true)
+        .classed('fade', true)
+        .classed('px-0', true)
+        .classed('show', active)
+        .classed('active', active)
+        .attr('id', id)
+        .attr('role', 'tabpanel')
+        .attr('aria-labelledby', `${id}-tab`);
+  }
+
+
+  var cbox = {
+    colorControlBox, updateColorControl, colorControlValid, colorControlState,
+    sizeControlBox, updateSizeControl, sizeControlValid, sizeControlState,
+    labelControlBox, updateLabelControl, labelControlValid, labelControlState,
+    controlBoxFrame, controlBoxNav, controlBoxItem
+  };
 
   const svgWidth = 180;  //TODO
   const svgHeight = 180;  //TODO
@@ -1878,15 +2705,13 @@ var app = (function (d3, _, pako) {
     state.updateAllNotifier = () => {
       state.updateFilter();
       state.updateVisibility();
-      //state.updateControlBoxNotifier();  // Update selectBox options
+      state.updateControlBoxNotifier();  // Update selectBox options
       state.setForceNotifier();
       state.updateComponentNotifier();
     };
     // Apply changes in nodes and edges displayed
     state.updateComponentNotifier = () => {
       // state.updateLegendNotifier();
-      // const coords = state.ns.map(e => ({x: e.x, y: e.y}));
-      // state.setAllCoords(coords);
       selection.call(updateComponents, state);
       state.updateInteractionNotifier();  // Apply drag events to each nodes
     };
@@ -1930,7 +2755,7 @@ var app = (function (d3, _, pako) {
           // multi selected node
           selection.selectAll(".node")
             .filter(d => d.__selected)
-            .each(d => {  // TODO: d.x += dx can work?
+            .each(d => {
               d.x += event.dx;
               d.y += event.dy;
             });
@@ -2152,10 +2977,9 @@ var app = (function (d3, _, pako) {
     dragListener, zoomListener, setInteraction
   };
 
-  const forceType = [
-    {
-      key: 'aggregate',
-      name: 'Aggregate',
+  const forceParam = {
+    dense: {
+      name: 'Dense',
       force: d3__default["default"].forceSimulation()
         .force('link', d3__default["default"].forceLink().id(d => d.__index).distance(60).strength(1))
         .force('charge',
@@ -2164,9 +2988,8 @@ var app = (function (d3, _, pako) {
         .force('x', d3__default["default"].forceX().strength(0.002))
         .force('y', d3__default["default"].forceY().strength(0.002))
     },
-    {
-      key: 'tree',
-      name: 'Tree',
+    moderate: {
+      name: 'Moderate',
       force: d3__default["default"].forceSimulation()
         .force('link', d3__default["default"].forceLink().id(d => d.__index).distance(60).strength(2))
         .force('charge',
@@ -2175,8 +2998,7 @@ var app = (function (d3, _, pako) {
         .force('x', d3__default["default"].forceX().strength(0.0002))
         .force('y', d3__default["default"].forceY().strength(0.0002))
     },
-    {
-      key: 'sparse',
+    sparse: {
       name: 'Sparse',
       force: d3__default["default"].forceSimulation()
         .force('link', d3__default["default"].forceLink().id(d => d.__index).distance(60).strength(2))
@@ -2186,11 +3008,11 @@ var app = (function (d3, _, pako) {
         .force('x', d3__default["default"].forceX().strength(0.0002))
         .force('y', d3__default["default"].forceY().strength(0.0002))
     }
-  ];
+  };
 
 
   function forceSimulation(type, width, height) {
-    return forceType.find(e => e.key === type).force
+    return forceParam[type].force
       .force('center', d3__default["default"].forceCenter(width / 2, height / 2))
       .stop();
   }
@@ -2222,7 +3044,6 @@ var app = (function (d3, _, pako) {
       });
     state.dragListener = interaction.dragListener(selection, state);
     state.forceActive = false;
-    console.log("stick");
   }
 
 
@@ -2245,18 +3066,13 @@ var app = (function (d3, _, pako) {
         .force('link').links(state.fedges);
       simulation
         .on('tick', () => {
-          // const coords = state.fnodes.map(e => ({x: e.x, y: e.y}));
-          // state.setAllCoords(coords);
-          selection.selectAll(".node")
-            .call(component.updateNodeCoords);
-          selection.selectAll(".link")
-            .call(component.updateEdgeCoords);
+          selection.selectAll(".node").call(component.updateNodeCoords);
+          selection.selectAll(".link").call(component.updateEdgeCoords);
           state.tickCallback(simulation);
         })
         .on('end', () => {
           state.setBoundary();
           state.updateComponentNotifier();
-          selection.call(stick, simulation, state);
           state.tickCallback(simulation);
         });
 
@@ -2283,7 +3099,762 @@ var app = (function (d3, _, pako) {
 
 
   var force = {
-    forceType, forceSimulation, activate
+    forceParam, forceSimulation, activate
+  };
+
+  // TODO:
+  /*
+  - control
+    - fit: button
+    - stick nodes: check
+
+    - Temperature: bar
+    - activate: button
+    - reset position: button
+
+  - filter
+    - add filter: button
+    - remove filter: button
+    - numeric
+      - key: select
+      - value: numeric
+      - condition: select
+    - nominal
+      - key: checkboxlist
+      - select/deselect all
+
+  - node apearance
+    - color field: select
+    - color rangePreset: select
+    - scaleType: select
+
+    - size field: select
+    - size rangePreset: select
+    - scaleType: select
+
+    - text visible: check
+    - text field: select
+    - text fontsize: numeric
+
+    - legend position: select (none, top-left, ...)
+    - always show node images: check
+
+  - edge apearance
+    - color field: select
+    - color rangePreset: select
+    - scaleType: select
+
+    - width field: select
+    - width rangePreset: select
+    - scaleType: select
+
+    - text visible: check
+    - text field: select
+    - text fontsize: numeric
+
+    - show legend: check
+    - legend position: select (none, top-left, ...)
+    - always show edges: check
+
+  - statistics (filter applied)
+    - node count
+    - edge count
+    - logD (edge density)
+    - number of connected components
+    - number of isolated nodes
+    - average path length
+    - clustering coefficient
+  */
+
+
+
+  function LayoutControlBox(selection, state) {
+    // Fit
+    selection.append('div')
+        .classed('mb-0', true)
+        .classed('fit', true)
+        .call(button.buttonBox, 'Fit to screen', 'outline-primary');
+    // Stick
+    selection.append('div')
+        .classed('mb-3', true)
+        .classed('stick', true)
+        .call(box.checkBox, 'Stick nodes');
+
+    // Force control
+    selection.append('div')
+        .classed('forceparam', true)
+        .classed('mb-1', true)
+        .classed('align-items-center', true)
+        .call(lbox.selectBox, 'Force parameter')
+        .call(lbox.updateSelectBoxOptions, Object.keys(force.forceParam));
+    const forceBox = selection.append('div')
+        .classed('mb-3', true);
+    forceBox.append('label')
+        .classed('form-label', true)
+        .classed('mb-0', true)
+        .text('Temperature');
+    forceBox.append('div')
+        .classed('temperature', true)
+        .classed('progress', true)
+        .classed('mb-2', true)
+      .append('div')
+        .classed('progress-bar', true)
+        .classed('w-30', true)
+        .attr('id', 'temperature')
+        .attr('role', 'progressbar')
+        .attr('aria-valuemin', 0)
+        .attr('aria-valuemax', 100);
+    const activateButtons = forceBox.append('div')
+        .classed('row', true);
+    activateButtons.append('div')
+        .classed('perturb', true)
+        .classed('col-4', true)
+        .call(button.buttonBox, 'Perturb', 'outline-success');
+    activateButtons.append('div')
+        .classed('random', true)
+        .classed('col-4', true)
+        .call(button.buttonBox, 'Random', 'outline-warning');
+  }
+
+  function updateLayoutControl(selection, state) {
+    // Fit
+    selection.select('.fit')
+        .on('click', function () {
+          state.fitNotifier();
+        });
+    // Force layout
+    state.tickCallback = (simulation) => {
+      const alpha = simulation.alpha();
+      const isStopped = alpha <= simulation.alphaMin();
+      const progress = parseInt(isStopped ? 0 : alpha * 100);
+      selection.select('.temperature')
+        .select('.progress-bar')
+          .classed('bg-success', isStopped)
+          .classed('bg-warning', !isStopped)
+          .style('width', `${progress}%`)
+          .attr('aria-valuenow', progress);
+    };
+    selection.select('.stick')
+        .call(box.updateCheckBox, !state.forceActive)
+        .on('change', function () {
+          const value = box.checkBoxValue(d3__default["default"].select(this));
+          state.forceActive = !value;
+          selection.select('.temperature')
+              .style('background-color', value ? '#a3e4d7' : '#e9ecef')
+            .select('.progress-bar')
+              .style('width', `0%`)
+              .attr('aria-valuenow', 0);
+          value ? state.stickNotifier() : state.relaxNotifier();
+          state.updateComponentNotifier();
+        });
+    selection.select('.forceparam')
+        .call(lbox.updateSelectBoxValue, state.config.forceParam)
+        .on('change', () => {
+          state.config.forceParam = lbox.selectBoxValue(selection);
+          state.setForceNotifier();
+        });
+    selection.select('.perturb')
+        .on('click', function () {
+          // TODO: disabled by stick
+          selection.select('.stick')
+              .call(box.updateCheckBox, false)
+              .dispatch('change');
+          state.restartNotifier();
+        });
+
+  }
+
+
+
+  function FilterControlBox(selection, state) {
+    // New filter
+    selection.append('div')
+        .classed('mb-3', true)
+        .classed('newfilter', true)
+        .call(button.buttonBox, '+ New filter', 'outline-primary');
+    // filters
+    selection.append('div')
+        .classed('mb-3', true)
+        .classed('filter-container', true);
+  }
+
+  function updateFilterControl(selection, state) {
+
+  }
+
+
+
+  function NodeControlBox(selection, state) {
+    // Node color
+    selection.append('div')
+      .classed('mb-1', true)
+      .classed('small', true)
+      .text("Node color");
+    // Color field
+    selection.append('div')
+        .classed('colorfield', true)
+        .classed('mb-1', true)
+        .classed('ms-3', true)
+        .classed('gx-0', true)
+        .call(lbox.selectBox, 'Field')
+        .call(lbox.updateSelectBoxOptions, state.nodeFields);
+    // Color range preset
+    selection.append('div')
+        .classed('colorrange', true)
+        .classed('mb-1', true)
+        .classed('ms-3', true)
+        .classed('gx-0', true)
+        .call(lbox.colorScaleBox, 'Range')
+        .call(lbox.updateColorScaleItems, Object.keys(cscale.scales.color));
+    // Color scale type
+    selection.append('div')
+        .classed('colorscale', true)
+        .classed('mb-3', true)
+        .classed('ms-3', true)
+        .classed('gx-0', true)
+        .call(lbox.selectBox, 'Scale')
+        .call(lbox.updateSelectBoxOptions, Object.keys(cscale.types));
+
+    // Node size
+    selection.append('div')
+      .classed('mb-1', true)
+      .classed('small', true)
+      .text("Node size");
+    // Size field
+    selection.append('div')
+        .classed('sizefield', true)
+        .classed('mb-1', true)
+        .classed('ms-3', true)
+        .classed('gx-0', true)
+        .call(lbox.selectBox, 'Field')
+        .call(lbox.updateSelectBoxOptions, state.nodeFields);
+    // Size range preset
+    selection.append('div')
+        .classed('sizerange', true)
+        .classed('mb-1', true)
+        .classed('ms-3', true)
+        .classed('gx-0', true)
+        .call(lbox.selectBox, 'Range')
+        .call(lbox.updateSelectBoxOptions, Object.keys(cscale.scales.nodeSize));
+    // Size scale type
+    selection.append('div')
+        .classed('sizescale', true)
+        .classed('mb-3', true)
+        .classed('ms-3', true)
+        .classed('gx-0', true)
+        .call(lbox.selectBox, 'Scale')
+        .call(lbox.updateSelectBoxOptions, Object.keys(cscale.types));
+
+    // Node label
+    selection.append('div')
+      .classed('mb-1', true)
+      .classed('small', true)
+      .text("Node label");
+    // Label visibility
+    selection.append('div')
+        .classed('labelvisible', true)
+        .classed('mb-1', true)
+        .classed('ms-3', true)
+        .classed('gx-0', true)
+        .call(box.checkBox, 'Show labels');
+    // Label field
+    selection.append('div')
+        .classed('labelfield', true)
+        .classed('mb-1', true)
+        .classed('ms-3', true)
+        .classed('gx-0', true)
+        .call(lbox.selectBox, 'Field')
+        .call(lbox.updateSelectBoxOptions, state.nodeFields);
+    // Label font size
+    selection.append('div')
+        .classed('labelsize', true)
+        .classed('mb-3', true)
+        .classed('ms-3', true)
+        .classed('gx-0', true)
+        .call(box.numberBox, 'Font size')
+        .call(box.updateNumberRange, 0.1, 999, 0.1)
+        .call(badge$1.updateInvalidMessage,
+              'Please provide a valid number (0.1-999)')
+      .select('.form-control')
+        .attr('required', 'required');
+
+    // Other settings
+    selection.append('div')
+        .classed('mb-1', true)
+        .classed('small', true)
+        .text("Settings");
+    selection.append('div')
+        .classed('shownodeimage', true)
+        .classed('mb-1', true)
+        .classed('ms-3', true)
+        .classed('gx-0', true)
+        .call(box.checkBox, 'Always show node images');
+    selection.append('div')
+        .classed('legend', true)
+        .classed('mb-3', true)
+        .classed('ms-3', true)
+        .classed('gx-0', true)
+        .call(lbox.selectBox, 'Legend')
+        .call(lbox.updateSelectBoxOptions,
+          ["none", "top-left", "top-right", "bottom-left", "bottom-right"]);
+  }
+
+  function updateNodeControl(selection, state) {
+    selection.select('.colorfield')
+        .call(lbox.updateSelectBoxValue, state.appearance.nodeColor.field)
+        .on('change', () => {
+          state.appearance.nodeColor.field = lbox.selectBoxValue(selection);
+          state.updateNodeAttrNotifier();
+        });
+    selection.select('.colorrange')
+        .call(lbox.updateColorScaleBox, state.appearance.nodeColor.rangePreset)
+        .on('change', () => {
+          state.appearance.nodeColor.rangePreset = lbox.colorScaleBoxValue(selection);
+          state.updateNodeAttrNotifier();
+        });
+    selection.select('.colorscale')
+        .call(lbox.updateSelectBoxValue, state.appearance.nodeColor.scale)
+        .on('change', () => {
+          state.appearance.nodeColor.scale = lbox.selectBoxValue(selection);
+          state.updateNodeAttrNotifier();
+        });
+
+    selection.select('.sizefield')
+        .call(lbox.updateSelectBoxValue, state.appearance.nodeSize.field)
+        .on('change', () => {
+          state.appearance.nodeSize.field = lbox.selectBoxValue(selection);
+          state.updateNodeAttrNotifier();
+        });
+    selection.select('.sizerange')
+        .call(lbox.updateSelectBoxValue, state.appearance.nodeSize.rangePreset)
+        .on('change', () => {
+          state.appearance.nodeSize.rangePreset = lbox.selectBoxValue(selection);
+          state.updateNodeAttrNotifier();
+        });
+    selection.select('.sizescale')
+        .call(lbox.updateSelectBoxValue, state.appearance.nodeSize.scale)
+        .on('change', () => {
+          state.appearance.nodeSize.scale = lbox.selectBoxValue(selection);
+          state.updateNodeAttrNotifier();
+        });
+
+    selection.select('.labelvisible')
+        .call(box.updateCheckBox, state.appearance.nodeLabel.visible)
+        .on('change', () => {
+          state.appearance.nodeLabel.visible = box.checkBoxValue(selection);
+          state.updateNodeAttrNotifier();
+        });
+    selection.select('.labelfield')
+        .call(lbox.updateSelectBoxValue, state.appearance.nodeLabel.field)
+        .on('change', () => {
+          state.appearance.nodeLabel.field = lbox.selectBoxValue(selection);
+          state.updateNodeAttrNotifier();
+        });
+    selection.select('.labelsize')
+        .call(box.updateFormValue, state.appearance.nodeLabel.size)
+        .on('change', () => {
+          state.appearance.nodeLabel.size = box.formValue(selection);
+          state.updateNodeAttrNotifier();
+        });
+
+    selection.select('.shownodeimage')
+        .call(box.updateCheckBox, state.config.alwaysShowNodeImage)
+        .on('change', () => {
+          state.config.alwaysShowNodeImage = box.checkBoxValue(selection);
+          state.updateComponentNotifier();
+        });
+
+    selection.select('.legend')
+        .call(lbox.updateSelectBoxValue, state.config.legendOrient)
+        .on('change', () => {
+          state.config.legendOrient = lbox.selectBoxValue(selection);
+          //state.updateLegendNotifier();
+        });
+  }
+
+  function EdgeControlBox(selection, state) {
+    // Edge color
+    selection.append('div')
+      .classed('mb-1', true)
+      .classed('small', true)
+      .text("Edge color");
+    // Color field
+    selection.append('div')
+        .classed('colorfield', true)
+        .classed('mb-1', true)
+        .classed('ms-3', true)
+        .classed('gx-0', true)
+        .call(lbox.selectBox, 'Field')
+        .call(lbox.updateSelectBoxOptions, state.edgeFields);
+    // Color range preset
+    selection.append('div')
+        .classed('colorrange', true)
+        .classed('mb-1', true)
+        .classed('ms-3', true)
+        .classed('gx-0', true)
+        .call(lbox.colorScaleBox, 'Range')
+        .call(lbox.updateColorScaleItems, Object.keys(cscale.scales.color));
+    // Color scale type
+    selection.append('div')
+        .classed('colorscale', true)
+        .classed('mb-3', true)
+        .classed('ms-3', true)
+        .classed('gx-0', true)
+        .call(lbox.selectBox, 'Scale')
+        .call(lbox.updateSelectBoxOptions, Object.keys(cscale.types));
+
+    // Edge width
+    selection.append('div')
+      .classed('mb-1', true)
+      .classed('small', true)
+      .text("Edge width");
+    // Width field
+    selection.append('div')
+        .classed('widthfield', true)
+        .classed('mb-1', true)
+        .classed('ms-3', true)
+        .classed('gx-0', true)
+        .call(lbox.selectBox, 'Field')
+        .call(lbox.updateSelectBoxOptions, state.edgeFields);
+    // Width range preset
+    selection.append('div')
+        .classed('widthrange', true)
+        .classed('mb-1', true)
+        .classed('ms-3', true)
+        .classed('gx-0', true)
+        .call(lbox.selectBox, 'Range')
+        .call(lbox.updateSelectBoxOptions, Object.keys(cscale.scales.edgeWidth));
+    // Width scale type
+    selection.append('div')
+        .classed('widthscale', true)
+        .classed('mb-3', true)
+        .classed('ms-3', true)
+        .classed('gx-0', true)
+        .call(lbox.selectBox, 'Scale')
+        .call(lbox.updateSelectBoxOptions, Object.keys(cscale.types));
+
+    // Edge label
+    selection.append('div')
+      .classed('mb-1', true)
+      .classed('small', true)
+      .text("Edge label");
+    // Label visibility
+    selection.append('div')
+        .classed('labelvisible', true)
+        .classed('mb-1', true)
+        .classed('ms-3', true)
+        .classed('gx-0', true)
+        .call(box.checkBox, 'Show labels');
+    // Label field
+    selection.append('div')
+        .classed('labelfield', true)
+        .classed('mb-1', true)
+        .classed('ms-3', true)
+        .classed('gx-0', true)
+        .call(lbox.selectBox, 'Field')
+        .call(lbox.updateSelectBoxOptions, state.edgeFields);
+    // Label font size
+    selection.append('div')
+        .classed('labelsize', true)
+        .classed('mb-3', true)
+        .classed('ms-3', true)
+        .classed('gx-0', true)
+        .call(box.numberBox, 'Font size')
+        .call(box.updateNumberRange, 0.1, 999, 0.1)
+        .call(badge$1.updateInvalidMessage,
+              'Please provide a valid number (0.1-999)')
+      .select('.form-control')
+        .attr('required', 'required');
+
+    // Other settings
+    selection.append('div')
+        .classed('mb-1', true)
+        .classed('small', true)
+        .text("Settings");
+    selection.append('div')
+        .classed('showedge', true)
+        .classed('mb-1', true)
+        .classed('ms-3', true)
+        .classed('gx-0', true)
+        .call(box.checkBox, 'Always show edges');
+    selection.append('div')
+        .classed('showlegend', true)
+        .classed('mb-1', true)
+        .classed('ms-3', true)
+        .classed('gx-0', true)
+        .call(box.checkBox, 'Show edge legends');
+  }
+
+  function updateEdgeControl(selection, state) {
+    selection.select('.colorfield')
+        .call(lbox.updateSelectBoxValue, state.appearance.edgeColor.field)
+        .on('change', () => {
+          state.appearance.edgeColor.field = lbox.selectBoxValue(selection);
+          state.updateEdgeAttrNotifier();
+        });
+    selection.select('.colorrange')
+        .call(lbox.updateColorScaleBox, state.appearance.edgeColor.rangePreset)
+        .on('change', () => {
+          state.appearance.edgeColor.rangePreset = lbox.colorScaleBoxValue(selection);
+          state.updateEdgeAttrNotifier();
+        });
+    selection.select('.colorscale')
+        .call(lbox.updateSelectBoxValue, state.appearance.edgeColor.scale)
+        .on('change', () => {
+          state.appearance.edgeColor.scale = lbox.selectBoxValue(selection);
+          state.updateEdgeAttrNotifier();
+        });
+
+    selection.select('.widthfield')
+        .call(lbox.updateSelectBoxValue, state.appearance.edgeWidth.field)
+        .on('change', () => {
+          state.appearance.edgeWidth.field = lbox.selectBoxValue(selection);
+          state.updateEdgeAttrNotifier();
+        });
+    selection.select('.widthrange')
+        .call(lbox.updateSelectBoxValue, state.appearance.edgeWidth.rangePreset)
+        .on('change', () => {
+          state.appearance.edgeWidth.rangePreset = lbox.selectBoxValue(selection);
+          state.updateEdgeAttrNotifier();
+        });
+    selection.select('.widthscale')
+        .call(lbox.updateSelectBoxValue, state.appearance.edgeWidth.scale)
+        .on('change', () => {
+          state.appearance.edgeWidth.scale = lbox.selectBoxValue(selection);
+          state.updateEdgeAttrNotifier();
+        });
+
+    selection.select('.labelvisible')
+        .call(box.updateCheckBox, state.appearance.edgeLabel.visible)
+        .on('change', () => {
+          state.appearance.edgeLabel.visible = box.checkBoxValue(selection);
+          state.updateEdgeAttrNotifier();
+        });
+    selection.select('.labelfield')
+        .call(lbox.updateSelectBoxValue, state.appearance.edgeLabel.field)
+        .on('change', () => {
+          state.appearance.edgeLabel.field = lbox.selectBoxValue(selection);
+          state.updateEdgeAttrNotifier();
+        });
+    selection.select('.labelsize')
+        .call(box.updateFormValue, state.appearance.edgeLabel.size)
+        .on('change', () => {
+          state.appearance.edgeLabel.size = box.formValue(selection);
+          state.updateEdgeAttrNotifier();
+        });
+
+    selection.select('.showedge')
+        .call(box.updateCheckBox, state.config.alwaysShowEdge)
+        .on('change', () => {
+          state.config.alwaysShowEdge = box.checkBoxValue(selection);
+          state.updateComponentNotifier();
+        });
+
+    selection.select('.legend')
+        .call(lbox.updateSelectBoxValue, state.config.legendOrient)
+        .on('change', () => {
+          state.config.legendOrient = lbox.selectBoxValue(selection);
+          //state.updateLegendNotifier();
+        });
+  }
+
+  function StatisticsBox(selection, state) {
+
+
+    selection
+        .classed('small', true);
+    // Components
+    const nodecount = selection.append('div')
+        .classed('row', true);
+    nodecount.append('div')
+        .classed('col-6', true)
+        .text("Node count:");
+    nodecount.append('div')
+        .classed('col-6', true)
+        .classed("nodecount", true);
+    const edgecount = selection.append('div')
+        .classed('row', true);
+    edgecount.append('div')
+        .classed('col-6', true)
+        .text("Edge count:");
+    edgecount.append('div')
+        .classed('col-6', true)
+        .classed("edgecount", true);
+
+    const logd = selection.append('div')
+        .classed('row', true);
+    logd.append('div')
+        .classed('col-6', true)
+        .text("logD:");
+    logd.append('div')
+        .classed('col-6', true)
+        .classed("logd", true);
+    // Network threshold  TODO: move to filter and statistics
+    /*
+    const thldGroup = selection.append('div')
+        .classed('thld-group', true)
+        .classed('mb-3', true);
+    thldGroup.append('div')
+        .classed('field', true)
+        .classed('mb-1', true)
+        .call(lbox.selectBox, 'Connection');
+    thldGroup.append('div')
+        .classed('thld', true)
+        .classed('mb-1', true)
+        .call(box.numberBox, 'Threshold')
+        .call(box.updateNumberRange, state.minConnThld, 1, 0.01)
+        .call(badge.updateInvalidMessage,
+              `Please provide a valid range (${state.minConnThld}-1.00)`)
+      .select('.form-control')
+        .attr('required', 'required');
+    thldGroup.append('div')
+        .classed('logd', true)
+        .classed('mb-1', true)
+        .call(box.readonlyBox, 'logD');
+    */
+
+
+    // Network threshold
+    /*
+    const thldGroup = selection.select('.thld-group');
+    const thldFields = state.edges.fields
+      .filter(e => misc.sortType(e.format) !== 'none')
+      .filter(e => !['source', 'target'].includes(e.key));
+    thldGroup.select('.field')
+        .call(lbox.updateSelectBoxOptions, thldFields)
+        .call(box.updateFormValue, state.connThldField);
+    thldGroup.select('.thld')
+        .call(box.updateFormValue, state.currentConnThld);
+    thldGroup.selectAll('.field, .thld')
+        .on('change', function () {
+          if(!box.formValid(thldGroup.select('.thld'))) return;
+          const field = box.formValue(thldGroup.select('.field'));
+          const thld = box.formValue(thldGroup.select('.thld'));
+          state.connThldField = field;
+          state.currentConnThld = thld;
+          thldGroup.select('.logd').dispatch('update');
+          state.setForceNotifier();
+          state.updateComponentNotifier();
+        });
+    thldGroup.select('.logd')
+        .on('update', function () {
+          // Calculate edge density
+          const field = state.connThldField;
+          const thld = state.currentConnThld;
+          const numEdges = state.es.filter(e => e[field] >= thld).length;
+          const n = state.ns.length;
+          const combinations = n * (n - 1) / 2;
+          const logD = d3.format('.2f')(Math.log10(numEdges / combinations));
+          d3.select(this).call(box.updateReadonlyValue, logD);
+        })
+        .dispatch('update');
+        */
+
+  }
+
+
+  function updateStatistics(selection, state) {
+
+
+    const ncnt = state.fnodes.length;
+    const ecnt = state.fedges.length;
+    const maxedges = ncnt * (ncnt - 1) / 2;
+    const logd = d3__default["default"].format('.2f')(Math.log10(ecnt / maxedges));
+
+    selection.select('.nodecount')
+        .text(ncnt);
+    selection.select('.edgecount')
+        .text(ecnt);
+    selection.select('.logd')
+        .text(logd);
+
+    /*
+    const fieldOptions = state.edges.fields
+      .filter(e => misc.sortType(e.format) !== 'none')
+      .filter(e => !['source', 'target'].includes(e.key));
+    selection
+        .call(cbox.updateSizeControl, fieldOptions, state.edgeWidth)
+        .on('change', function() {
+          if (!cbox.sizeControlValid(selection)) return;
+          state.edgeWidth = cbox.sizeControlState(selection);
+          state.updateEdgeAttrNotifier();
+        });*/
+  }
+
+
+
+  function controlBox(selection, state) {
+    // Clean up
+    selection.select(".nav-tabs").remove();
+    selection.select(".tab-content").remove();
+
+    const tabs = selection.append("ul")
+        .classed("nav", true)
+        .classed("nav-tabs", true)
+        .attr("id", "control-tab")
+        .attr("role", "tablist");
+    const content = selection.append("div")
+        .classed("tab-content", true)
+        .classed('p-2', true)
+        .attr("id", "control-tab-content");
+
+    // Layout
+    tabs.append('li')
+        .call(cbox.controlBoxNav, 'control-layout', 'Layout', true);
+    content.append('div')
+        .call(cbox.controlBoxItem, 'control-layout', true)
+        .call(LayoutControlBox, state);
+
+    // Filter
+    tabs.append('li')
+        .call(cbox.controlBoxNav, 'control-filter', 'Filter', false);
+    content.append('div')
+        .call(cbox.controlBoxItem, 'control-filter', false)
+        .call(FilterControlBox, state);
+
+    // Node
+    tabs.append('li')
+        .call(cbox.controlBoxNav, 'control-node', 'Node', false);
+    content.append('div')
+        .call(cbox.controlBoxItem, 'control-node', false)
+        .call(NodeControlBox, state);
+
+    // Edge
+    tabs.append('li')
+        .call(cbox.controlBoxNav, 'control-edge', 'Edge', false);
+    content.append('div')
+        .call(cbox.controlBoxItem, 'control-edge', false)
+        .call(EdgeControlBox, state);
+
+    // Statistics
+    tabs.append('li')
+        .call(cbox.controlBoxNav, 'control-stat', 'Statistics', false);
+    content.append('div')
+        .call(cbox.controlBoxItem, 'control-stat', false)
+        .call(StatisticsBox, state);
+
+    state.updateControlBoxNotifier = () => {
+      selection.call(updateControlBox, state);
+    };
+  }
+
+
+  function updateControlBox(selection, state) {
+    selection.select('#control-layout')
+        .call(updateLayoutControl, state);
+    selection.select('#control-filter')
+        .call(updateFilterControl, state);
+    selection.select('#control-node')
+        .call(updateNodeControl, state);
+    selection.select('#control-edge')
+        .call(updateEdgeControl, state);
+    selection.select('#control-stat')
+        .call(updateStatistics, state);
+  }
+
+
+  var control = {
+    controlBox, updateControlBox
   };
 
   function updateApp(state) {
@@ -2413,8 +3984,8 @@ var app = (function (d3, _, pako) {
         .call(component.networkView, state)
         .call(force.activate, state)
         .call(interaction.setInteraction, state);
-    //d3.select('#control')
-    //    .call(control.controlBox, state);
+    d3__namespace.select('#control')
+        .call(control.controlBox, state);
 
     // Resize window
     window.onresize = () =>

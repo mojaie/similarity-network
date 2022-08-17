@@ -7,10 +7,9 @@ import {default as component} from './component.js';
 import {default as interaction} from './interaction.js';
 
 
-const forceType = [
-  {
-    key: 'aggregate',
-    name: 'Aggregate',
+const forceParam = {
+  dense: {
+    name: 'Dense',
     force: d3.forceSimulation()
       .force('link', d3.forceLink().id(d => d.__index).distance(60).strength(1))
       .force('charge',
@@ -19,9 +18,8 @@ const forceType = [
       .force('x', d3.forceX().strength(0.002))
       .force('y', d3.forceY().strength(0.002))
   },
-  {
-    key: 'tree',
-    name: 'Tree',
+  moderate: {
+    name: 'Moderate',
     force: d3.forceSimulation()
       .force('link', d3.forceLink().id(d => d.__index).distance(60).strength(2))
       .force('charge',
@@ -30,8 +28,7 @@ const forceType = [
       .force('x', d3.forceX().strength(0.0002))
       .force('y', d3.forceY().strength(0.0002))
   },
-  {
-    key: 'sparse',
+  sparse: {
     name: 'Sparse',
     force: d3.forceSimulation()
       .force('link', d3.forceLink().id(d => d.__index).distance(60).strength(2))
@@ -41,11 +38,11 @@ const forceType = [
       .force('x', d3.forceX().strength(0.0002))
       .force('y', d3.forceY().strength(0.0002))
   }
-];
+};
 
 
 function forceSimulation(type, width, height) {
-  return forceType.find(e => e.key === type).force
+  return forceParam[type].force
     .force('center', d3.forceCenter(width / 2, height / 2))
     .stop();
 }
@@ -77,7 +74,6 @@ function stick(selection, simulation, state) {
     });
   state.dragListener = interaction.dragListener(selection, state);
   state.forceActive = false;
-  console.log("stick")
 }
 
 
@@ -100,18 +96,13 @@ function activate(selection, state) {
       .force('link').links(state.fedges);
     simulation
       .on('tick', () => {
-        // const coords = state.fnodes.map(e => ({x: e.x, y: e.y}));
-        // state.setAllCoords(coords);
-        selection.selectAll(".node")
-          .call(component.updateNodeCoords);
-        selection.selectAll(".link")
-          .call(component.updateEdgeCoords);
+        selection.selectAll(".node").call(component.updateNodeCoords);
+        selection.selectAll(".link").call(component.updateEdgeCoords);
         state.tickCallback(simulation);
       })
       .on('end', () => {
         state.setBoundary();
         state.updateComponentNotifier();
-        selection.call(stick, simulation, state);
         state.tickCallback(simulation);
       });
 
@@ -138,5 +129,5 @@ function activate(selection, state) {
 
 
 export default {
-  forceType, forceSimulation, activate
+  forceParam, forceSimulation, activate
 };

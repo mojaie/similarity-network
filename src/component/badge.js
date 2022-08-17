@@ -3,8 +3,8 @@
 
 import d3 from 'd3';
 
-const assetBaseURL = '../assets/';
-const iconBaseURL = '../assets/icon/';
+const assetBaseURL = './asset/';
+const iconBaseURL = './asset/icon/';
 
 
 function badge(selection) {
