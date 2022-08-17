@@ -1,4 +1,4 @@
-var app = (function (d3, _, pako) {
+var app = (function (d3, _) {
   'use strict';
 
   function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
@@ -24,7 +24,6 @@ var app = (function (d3, _, pako) {
   var d3__default = /*#__PURE__*/_interopDefaultLegacy(d3);
   var d3__namespace = /*#__PURE__*/_interopNamespace(d3);
   var ___default = /*#__PURE__*/_interopDefaultLegacy(_);
-  var pako__default = /*#__PURE__*/_interopDefaultLegacy(pako);
 
   function URLQuery() {
     const pairs = window.location.search.substring(1).split("&")
@@ -333,83 +332,12 @@ var app = (function (d3, _, pako) {
   }
 
 
-  var idb = {
+  var idb$1 = {
     clear, clearAll,
     getConfig, putConfig,
     getSessionHeaders,
     getSession, putSession, deleteSession,
     appendSnapshot, deleteSnapshot
-  };
-
-  function readFile(file, sizeLimit, blob) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      const truncated = sizeLimit ? file.slice(0, sizeLimit) : file;
-      reader.onload = event => resolve(event.target.result);
-      reader.onerror = error => reject(error);
-      if (blob) {
-        reader.readAsArrayBuffer(truncated);
-      } else {
-        reader.readAsText(truncated);
-      }
-    });
-  }
-
-
-  function parseJSON(data, compressed) {
-    const text = compressed ? pako__default["default"].inflate(data, {to: 'string'}) : data;
-    return JSON.parse(text);
-  }
-
-
-  function loadJSON(file) {
-    const compressed = file.name.endsWith('c') || file.name.endsWith('.gz');
-    return readFile(file, false, compressed)
-      .then(data => parseJSON(data, compressed));
-  }
-
-
-  function fetchJSON(url) {
-    const decoded = decodeURIComponent(url);
-    const compressed = decoded.endsWith('c') || decoded.endsWith('.gz');
-    return fetch(decoded)
-      .then(res => compressed ? res.arrayBuffer() : res.json())
-      .then(data => parseJSON(data, compressed));
-  }
-
-
-  function downloadDataFile(data, name) {
-    try {
-      // cannot hundle large file with dataURI scheme
-      // url = 'data:application/json,' + encodeURIComponent(JSON.stringify(json))
-      const url = window.URL.createObjectURL(new Blob([data]));
-      const a = document.createElement('a');
-      a.download = name;
-      a.href = url;
-      // a.click() does not work on firefox
-      a.dispatchEvent(new MouseEvent('click', {
-        'view': window,
-        'bubbles': true,
-        'cancelable': false
-      }));
-      // window.URL.revokeObjectURL(url) does not work on firefox
-    } catch (e) {
-      // no DOM (unit testing)
-    }
-  }
-
-
-  function downloadJSON(json, name, compress=true) {
-    const str = JSON.stringify(json);
-    const data = compress ? pako__default["default"].gzip(str) : str;
-    const ext = `.ap${compress ? 'c' : 'r'}`;
-    downloadDataFile(data, `${name}${ext}`);
-  }
-
-
-  var hfile = {
-    readFile, parseJSON, loadJSON, fetchJSON,
-    downloadDataFile, downloadJSON
   };
 
   const assetBaseURL = './asset/';
@@ -1250,143 +1178,6 @@ var app = (function (d3, _, pako) {
     checkBox, updateCheckBox, checkBoxValue,
     colorBox,
     fileInputBox, clearFileInput, fileInputValue, fileInputValid
-  };
-
-  function dialogBase(selection, id) {
-    selection
-        .classed('modal', true)
-        .attr('tabindex', -1)
-        .attr('role', 'dialog')
-        .attr('aria-labelledby', '')
-        .attr('aria-hidden', true)
-        .attr('id', id);
-    selection.append('div')
-        .classed('modal-dialog', true)
-        .attr('role', 'document')
-      .append('div')
-        .classed('modal-content', true);
-  }
-
-
-  function confirmDialog(selection, id) {
-    const base = selection.call(dialogBase, id)
-        .select('.modal-content');
-    // body
-    base.append('div')
-        .classed('modal-body', true)
-      .append('div')
-        .classed('message', true);
-    // footer
-    const footer = base.append('div')
-        .classed('modal-footer', true);
-    footer.append('button')
-        .classed('btn', true)
-        .classed('btn-outline-secondary', true)
-        .classed('cancel', true)
-        .attr('type', 'button')
-        .attr('data-dismiss', 'modal')
-        .text('Cancel');
-    footer.append('button')
-        .classed('btn', true)
-        .classed('btn-warning', true)
-        .classed('ok', true)
-        .attr('type', 'button')
-        .attr('data-dismiss', 'modal')
-        .text('OK')
-        .on('click', () => {
-          selection.dispatch('submit');
-        });
-  }
-
-
-  function updateConfirmDialog(selection, message) {
-    selection.select('.message').text(message);
-  }
-
-
-  function submitDialog(selection, id, title) {
-    const base = selection.call(dialogBase, id)
-        .select('.modal-content');
-    // header
-    const header = base.append('div')
-        .classed('modal-header', true);
-    header.append('h4')
-        .classed('modal-title', true)
-        .text(title);
-    header.append('button')
-        .attr('type', 'button')
-        .attr('data-dismiss', 'modal')
-        .attr('aria-label', 'Close')
-        .classed('close', true)
-      .append('span')
-        .attr('aria-hidden', true)
-        .html('&times;');
-    // body
-    base.append('div')
-        .classed('modal-body', true);
-    // footer
-    base.append('div')
-        .classed('modal-footer', true)
-      .append('button')
-        .classed('btn', true)
-        .classed('btn-primary', true)
-        .classed('submit', true)
-        .attr('type', 'button')
-        .attr('data-dismiss', 'modal')
-        .text('Submit')
-        .on('click', () => {
-          // Dismiss before submit
-          // Submit event can update the modal itself
-          // (ex. disable submit button before onSubmit call has completed)
-          $(`#${id}`).modal('hide');
-          selection.dispatch('submit');
-        });
-  }
-
-
-  var modal = {
-    confirmDialog, updateConfirmDialog, submitDialog
-  };
-
-  const id = 'rename-dialog';
-  const title = 'Rename';
-
-
-  function menuLink(selection) {
-    selection.call(button.dropdownMenuModal, title, id, 'menu-edittext');
-  }
-
-
-  function body(selection) {
-    const renameBox = selection.call(modal.submitDialog, id, title)
-      .select('.modal-body').append('div')
-        .classed('rename', true)
-        .call(box.textBox, 'New name');
-    renameBox.select('.form-control')
-        .attr('required', 'required');
-    renameBox.select('.invalid-feedback')
-        .call(badge$1.updateInvalidMessage, 'Please provide a valid name');
-  }
-
-
-  function updateBody(selection, name) {
-    selection.select('.rename')
-        .call(box.updateFormValue, name)
-        .on('input', function () {
-          const valid = box.formValid(d3__default["default"].select(this));
-          selection.select('.submit').property('disabled', !valid);
-        })
-        .dispatch('input');
-  }
-
-
-  function value(selection) {
-    return box.formValue(selection.select('.rename'));
-  }
-
-
-  var renameDialog = {
-    menuLink, body, updateBody, value
   };
 
   class TransformState {
@@ -3102,72 +2893,6 @@ var app = (function (d3, _, pako) {
     forceParam, forceSimulation, activate
   };
 
-  // TODO:
-  /*
-  - control
-    - fit: button
-    - stick nodes: check
-
-    - Temperature: bar
-    - activate: button
-    - reset position: button
-
-  - filter
-    - add filter: button
-    - remove filter: button
-    - numeric
-      - key: select
-      - value: numeric
-      - condition: select
-    - nominal
-      - key: checkboxlist
-      - select/deselect all
-
-  - node apearance
-    - color field: select
-    - color rangePreset: select
-    - scaleType: select
-
-    - size field: select
-    - size rangePreset: select
-    - scaleType: select
-
-    - text visible: check
-    - text field: select
-    - text fontsize: numeric
-
-    - legend position: select (none, top-left, ...)
-    - always show node images: check
-
-  - edge apearance
-    - color field: select
-    - color rangePreset: select
-    - scaleType: select
-
-    - width field: select
-    - width rangePreset: select
-    - scaleType: select
-
-    - text visible: check
-    - text field: select
-    - text fontsize: numeric
-
-    - show legend: check
-    - legend position: select (none, top-left, ...)
-    - always show edges: check
-
-  - statistics (filter applied)
-    - node count
-    - edge count
-    - logD (edge density)
-    - number of connected components
-    - number of isolated nodes
-    - average path length
-    - clustering coefficient
-  */
-
-
-
   function LayoutControlBox(selection, state) {
     // Fit
     selection.append('div')
@@ -3261,10 +2986,24 @@ var app = (function (d3, _, pako) {
               .dispatch('change');
           state.restartNotifier();
         });
+    // TODO: random
 
   }
 
 
+
+  /*
+  - filter
+    - add filter: button
+    - remove filter: button
+    - numeric
+      - key: select
+      - value: numeric
+      - condition: select
+    - nominal
+      - key: checkboxlist
+      - select/deselect all
+  */
 
   function FilterControlBox(selection, state) {
     // New filter
@@ -3658,9 +3397,22 @@ var app = (function (d3, _, pako) {
         });
   }
 
+
+
+
+  /*
+  - statistics (filter applied)
+    - node count
+    - edge count
+    - logD (edge density)
+    - number of connected components
+    - number of isolated nodes
+    - average path length
+    - clustering coefficient
+  */
+
+
   function StatisticsBox(selection, state) {
-
-
     selection
         .classed('small', true);
     // Components
@@ -3689,73 +3441,10 @@ var app = (function (d3, _, pako) {
     logd.append('div')
         .classed('col-6', true)
         .classed("logd", true);
-    // Network threshold  TODO: move to filter and statistics
-    /*
-    const thldGroup = selection.append('div')
-        .classed('thld-group', true)
-        .classed('mb-3', true);
-    thldGroup.append('div')
-        .classed('field', true)
-        .classed('mb-1', true)
-        .call(lbox.selectBox, 'Connection');
-    thldGroup.append('div')
-        .classed('thld', true)
-        .classed('mb-1', true)
-        .call(box.numberBox, 'Threshold')
-        .call(box.updateNumberRange, state.minConnThld, 1, 0.01)
-        .call(badge.updateInvalidMessage,
-              `Please provide a valid range (${state.minConnThld}-1.00)`)
-      .select('.form-control')
-        .attr('required', 'required');
-    thldGroup.append('div')
-        .classed('logd', true)
-        .classed('mb-1', true)
-        .call(box.readonlyBox, 'logD');
-    */
-
-
-    // Network threshold
-    /*
-    const thldGroup = selection.select('.thld-group');
-    const thldFields = state.edges.fields
-      .filter(e => misc.sortType(e.format) !== 'none')
-      .filter(e => !['source', 'target'].includes(e.key));
-    thldGroup.select('.field')
-        .call(lbox.updateSelectBoxOptions, thldFields)
-        .call(box.updateFormValue, state.connThldField);
-    thldGroup.select('.thld')
-        .call(box.updateFormValue, state.currentConnThld);
-    thldGroup.selectAll('.field, .thld')
-        .on('change', function () {
-          if(!box.formValid(thldGroup.select('.thld'))) return;
-          const field = box.formValue(thldGroup.select('.field'));
-          const thld = box.formValue(thldGroup.select('.thld'));
-          state.connThldField = field;
-          state.currentConnThld = thld;
-          thldGroup.select('.logd').dispatch('update');
-          state.setForceNotifier();
-          state.updateComponentNotifier();
-        });
-    thldGroup.select('.logd')
-        .on('update', function () {
-          // Calculate edge density
-          const field = state.connThldField;
-          const thld = state.currentConnThld;
-          const numEdges = state.es.filter(e => e[field] >= thld).length;
-          const n = state.ns.length;
-          const combinations = n * (n - 1) / 2;
-          const logD = d3.format('.2f')(Math.log10(numEdges / combinations));
-          d3.select(this).call(box.updateReadonlyValue, logD);
-        })
-        .dispatch('update');
-        */
-
   }
 
 
   function updateStatistics(selection, state) {
-
-
     const ncnt = state.fnodes.length;
     const ecnt = state.fedges.length;
     const maxedges = ncnt * (ncnt - 1) / 2;
@@ -3767,18 +3456,6 @@ var app = (function (d3, _, pako) {
         .text(ecnt);
     selection.select('.logd')
         .text(logd);
-
-    /*
-    const fieldOptions = state.edges.fields
-      .filter(e => misc.sortType(e.format) !== 'none')
-      .filter(e => !['source', 'target'].includes(e.key));
-    selection
-        .call(cbox.updateSizeControl, fieldOptions, state.edgeWidth)
-        .on('change', function() {
-          if (!cbox.sizeControlValid(selection)) return;
-          state.edgeWidth = cbox.sizeControlState(selection);
-          state.updateEdgeAttrNotifier();
-        });*/
   }
 
 
@@ -3857,42 +3534,135 @@ var app = (function (d3, _, pako) {
     controlBox, updateControlBox
   };
 
-  function updateApp(state) {
-    // Title
-    d3__namespace.select('title').text(state.name);
+  /*
+  header1
+  - switch session: dropdown -> dialog confirm (if unsaved snapshot)
+  - open new session: button-> open file(.json)
+  - rename session: button -> dialog rename
+  - export session: button -> download
+  - delete session: button -> dialog confirm
+  - reset workspace -> dialog confirm
+  header2
+  - switch snapshot: dropdown -> dialog confirm (if unsaved snapshot)
+  - save: button
+  - rename: button -> dialog rename
+  - resume: button -> dialog confirm
+  - delete: button -> dialog confirm
 
-    // Status
-    d3__namespace.select('#menubar .name').text(state.name);
+  */
 
-    const onLoading = d3__namespace.select('#menubar .loading-circle');
-    const commaf = d3__namespace.format(',');
-    d3__namespace.select('#menubar .nodes-count')
-        .call(badge$1.updateBadge, `${commaf(state.nodes.length)} nodes`,
-              'light', 'nodes-gray')
-      .select('.text')
-        .style('color', 'gray');
-    d3__namespace.select('#menubar .edges-count')
-        .call(badge$1.updateBadge, `${commaf(state.edges.length)} edges`,
-              'light', 'edges-gray')
-      .select('.text')
-        .style('color', 'gray');
-
-
-    // Dialogs
-    const dialogs = d3__namespace.select('#dialogs');
-
-    // Rename dialog
-    dialogs.select('.renamed')
-        .call(renameDialog.updateBody, state.name)
-        .on('submit', function () {
-          onLoading.style('display', 'inline-block');
-          state.name = renameDialog.value(d3__namespace.select(this));
-          updateApp(state);
-        });
-
-    onLoading.style('display', 'none');
+  function actionIcon(selection, icon) {
+    selection.append('img')
+      .attr('src', `${button.iconBaseURL}${icon}.svg`)
+      .classed('mx-1', true)
+      .style('width', '1.25rem')
+      .style('height', '1.25rem');
   }
 
+  function sessionMenu(selection) {
+    selection
+        .classed('row', true)
+        .classed('mb-1', true);
+    // switch
+    selection.append('div')
+        .classed('switch', true)
+        .classed('col-8', true)
+        .call(lbox.selectBox, 'Session');
+
+    const menu = selection.append('div')
+        .classed('col-4', true);
+    // open
+    menu.append('span')
+        .classed('open', true)
+      .append('a')
+        .call(button.dropdownMenuFile, 'Open new session', '.json,.gz', 'menu-import');
+    
+    // export
+    menu.append('span')
+        .classed('export', true)
+      .append('a')
+        .call(button.dropdownMenuItem, '', 'menu-export');
+    
+    // loading circle
+    menu.append('span')
+        .classed('loading-circle', true)
+        .call(badge$1.loadingCircle);
+  }
+
+  function updateSessionMenu(selection) {
+    // TODO: idb
+    const sessionIDs = [];
+    const currentSessionID = null;
+    // switch
+    selection.select('.switch')
+        .call(lbox.updateSelectBoxOptions, sessionIDs)
+        .call(lbox.updateSelectBoxValue, currentSessionID)
+        .on('change', () => {
+          
+        });
+    // open
+    selection.select('.open')
+        .on('change', async () => {
+          d3__default["default"].select('.loading-circle').style('display', 'inline-block');
+          const file = button.dropdownMenuFileValue(menu);
+          const json = await hfile.loadJSON(file);
+          await idb.importItem(json);
+          await updateApp();
+        });
+    // export
+    selection.select('.export')
+        .on('click', () => {
+          const data = JSON.parse(JSON.stringify(record));
+          delete data.instance;
+          delete data.sessionStarted;
+          hfile.downloadJSON(data, data.name);
+        });
+  }
+
+
+
+  function snapshotMenu(selection, state) {
+    selection
+        .classed('row', true)
+        .classed('mb-1', true);
+    // switch
+    selection.append('div')
+        .classed('switch', true)
+        .classed('col-8', true)
+        .call(lbox.selectBox, 'Snapshot');
+
+    const menu = selection.append('div')
+        .classed('col-4', true);
+    // open
+    menu.append('span')
+        .classed('export', true)
+      .append('a')
+        .call(actionIcon, 'menu-export')
+        .call(button.dropdownMenuFile, 'Open new session', '.json,.gz', 'menu-import');
+
+    // notify saved
+    menu.append('span')
+        .classed('notify-saved', true)
+        .call(badge$1.alert)
+        .call(badge$1.updateAlert, 'State saved', 'success', 'check-green')
+        .style('display', 'none');
+  }
+
+
+  function updateSnapshotMenu(selection, state) {
+    // export
+    selection.select('.export')
+        .call(actionIcon, 'menu-export')
+        .on('click', function () {
+          return state.saveSnapshot(idb)
+            .then(menubar.select('.notify-saved').call(badge$1.notify));
+        });
+  }
+
+
+  var header = {
+    sessionMenu, updateSessionMenu, snapshotMenu, updateSnapshotMenu
+  };
 
   async function run() {
     const err = client.compatibility();
@@ -3903,79 +3673,21 @@ var app = (function (d3, _, pako) {
       return;
     }
 
-    const header1 = d3__namespace.select('#header1')
-        .classed('my-1', true);
-    const header2 = d3__namespace.select('#header2')
-        .classed('my-1', true);
+    d3__namespace.select('#header-session')
+        .call(header.sessionMenu);
+    d3__namespace.select('#header-snapshot')
+        .call(header.snapshotMenu);
     d3__namespace.select('#dialogs');
-    // header1.selectAll('div,span,a').remove();  // Clean up
-    // header2.selectAll('div,span,a').remove();  // Clean up
-    // dialogs.selectAll('div').remove();  // Clean up
-
-
-    const actionIcon = (sel, icon) => sel.append('img')
-        .attr('src', `${button.iconBaseURL}${icon}.svg`)
-        .classed('mx-1', true)
-        .style('width', '1.25rem')
-        .style('height', '1.25rem');
-    // Header
-    header1.append('span')
-        .classed('name', true);
-    header1.append('a')
-        .call(button.dropdownMenuFile, 'Open new session',
-          '.json,.gz', 'menu-import')
-        .on('change', function () {
-          d3__namespace.select('#menubar .loading-circle').style('display', 'inline-block');
-          const file = button.dropdownMenuFileValue(d3__namespace.select(this));
-          return hfile.loadJSON(file)
-            .then(idb.importItem)
-            .then(updateApp);
-        });
-    header1.append('a')
-        .call(button.dropdownMenuItem, 'Export current session', 'menu-export')
-        .on('click', () => {
-          const data = JSON.parse(JSON.stringify(record));
-          delete data.instance;
-          delete data.sessionStarted;
-          hfile.downloadJSON(data, data.name);
-        });
-    header1.append('span')
-        .classed('loading-circle', true)
-        .call(badge$1.loadingCircle);
-
-    header2.append('a').call(actionIcon, 'menu-export')
-        .on('click', function () {
-          return state.saveSnapshot(idb)
-            .then(menubar.select('.notify-saved').call(badge$1.notify));
-        });
-    header2.append('span')
-        .classed('notify-saved', true)
-        .call(badge$1.alert)
-        .call(badge$1.updateAlert, 'State saved', 'success', 'check-green')
-        .style('display', 'none');
     //const sid = await idb.putSession(stub);
     //await idb.putConfig("currentSession", sid);
 
-    const sessionid = await idb.getConfig("currentSession");
+    const sessionid = await idb$1.getConfig("currentSession");
     if (!sessionid) { return; }
-    const session = await idb.getSession(sessionid);
+    const session = await idb$1.getSession(sessionid);
     const state = new NetworkState(session);
     // TODO: define field size according to the data size
     state.fieldWidth = 1200;
     state.fieldHeight = 1200;
-
-
-    // TODO: export session (json.tar.gz)
-
-    // snapshotはcontrolでpull down選択?にする
-    // save snapshotもcontrolに表示
-    // 初期は最新のsnapshotを表示
-
-    // Jupyter notebook風に
-    // TODO: rename session
-    // TODO: rename snapshot
-
-    // TODO: 座標の初期化(0,0付近にランダム配置)
 
     // Contents
     const frame = d3__namespace.select('#frame')
@@ -3992,8 +3704,8 @@ var app = (function (d3, _, pako) {
       d3__namespace.select('#frame').call(transform$1.resize, state);
 
     // Update
-    state.updateAllNotifier();
-    updateApp(state);
+    //state.updateAllNotifier();
+    //updateApp(state);
   }
 
 
@@ -4003,4 +3715,4 @@ var app = (function (d3, _, pako) {
 
   return app;
 
-})(d3, _, pako);
+})(d3, _);

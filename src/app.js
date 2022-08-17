@@ -19,6 +19,8 @@ import {default as component} from './network/component.js';
 import {default as force} from './network/force.js';
 import {default as interaction} from './network/interaction.js';
 
+import {default as header} from './network/header.js';
+
 
 function updateApp(state) {
   // Title
@@ -28,18 +30,6 @@ function updateApp(state) {
   d3.select('#menubar .name').text(state.name);
 
   const onLoading = d3.select('#menubar .loading-circle');
-  const commaf = d3.format(',');
-  d3.select('#menubar .nodes-count')
-      .call(badge.updateBadge, `${commaf(state.nodes.length)} nodes`,
-            'light', 'nodes-gray')
-    .select('.text')
-      .style('color', 'gray');
-  d3.select('#menubar .edges-count')
-      .call(badge.updateBadge, `${commaf(state.edges.length)} edges`,
-            'light', 'edges-gray')
-    .select('.text')
-      .style('color', 'gray');
-
 
   // Dialogs
   const dialogs = d3.select('#dialogs');
@@ -66,67 +56,12 @@ async function run() {
     return;
   }
 
-  const header1 = d3.select('#header1')
-      .classed('my-1', true);
-  const header2 = d3.select('#header2')
-      .classed('my-1', true);
+  const sessionMenu = d3.select('#header-session')
+      .call(header.sessionMenu);
+  const snapshotMenu = d3.select('#header-snapshot')
+      .call(header.snapshotMenu);
   const dialogs = d3.select('#dialogs');
-  // header1.selectAll('div,span,a').remove();  // Clean up
-  // header2.selectAll('div,span,a').remove();  // Clean up
-  // dialogs.selectAll('div').remove();  // Clean up
 
-
-  const actionIcon = (sel, icon) => sel.append('img')
-      .attr('src', `${button.iconBaseURL}${icon}.svg`)
-      .classed('mx-1', true)
-      .style('width', '1.25rem')
-      .style('height', '1.25rem');
-  // Header
-  header1.append('span')
-      .classed('name', true);
-  header1.append('a')
-      .call(button.dropdownMenuFile, 'Open new session',
-        '.json,.gz', 'menu-import')
-      .on('change', function () {
-        d3.select('#menubar .loading-circle').style('display', 'inline-block');
-        const file = button.dropdownMenuFileValue(d3.select(this));
-        return hfile.loadJSON(file)
-          .then(idb.importItem)
-          .then(updateApp);
-      });
-  header1.append('a')
-      .call(button.dropdownMenuItem, 'Export current session', 'menu-export')
-      .on('click', () => {
-        const data = JSON.parse(JSON.stringify(record));
-        delete data.instance;
-        delete data.sessionStarted;
-        hfile.downloadJSON(data, data.name);
-      });
-  header1.append('span')
-      .classed('loading-circle', true)
-      .call(badge.loadingCircle);
-
-  header2.append('a').call(actionIcon, 'menu-export')
-      .on('click', function () {
-        return state.saveSnapshot(idb)
-          .then(menubar.select('.notify-saved').call(badge.notify));
-      });
-  header2.append('span')
-      .classed('notify-saved', true)
-      .call(badge.alert)
-      .call(badge.updateAlert, 'State saved', 'success', 'check-green')
-      .style('display', 'none');
-
-
-  // Control statsに置く
-  /*
-  menubar.append('span')
-  .classed('nodes-count', true)
-  .call(badge.badge);
-  menubar.append('span')
-  .classed('edges-count', true)
-  .call(badge.badge);
-  */
 
   // TODO:
   // idb config defaultWorkspaceを取りに行く
@@ -154,19 +89,6 @@ async function run() {
   state.fieldWidth = 1200;
   state.fieldHeight = 1200;
 
-
-  // TODO: export session (json.tar.gz)
-
-  // snapshotはcontrolでpull down選択?にする
-  // save snapshotもcontrolに表示
-  // 初期は最新のsnapshotを表示
-
-  // Jupyter notebook風に
-  // TODO: rename session
-  // TODO: rename snapshot
-
-  // TODO: 座標の初期化(0,0付近にランダム配置)
-
   // Contents
   const frame = d3.select('#frame')
       .call(transform.viewFrame, state);
@@ -182,8 +104,8 @@ async function run() {
     d3.select('#frame').call(transform.resize, state);
 
   // Update
-  state.updateAllNotifier();
-  updateApp(state);
+  //state.updateAllNotifier();
+  //updateApp(state);
 }
 
 

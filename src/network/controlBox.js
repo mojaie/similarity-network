@@ -16,31 +16,6 @@ import {default as button} from '../component/button.js';
 import {default as force} from './force.js';
 
 
-// TODO:
-/*
-
-- filter
-  - add filter: button
-  - remove filter: button
-  - numeric
-    - key: select
-    - value: numeric
-    - condition: select
-  - nominal
-    - key: checkboxlist
-    - select/deselect all
-
-- statistics (filter applied)
-  - node count
-  - edge count
-  - logD (edge density)
-  - number of connected components
-  - number of isolated nodes
-  - average path length
-  - clustering coefficient
-*/
-
-
 
 function LayoutControlBox(selection, state) {
   // Fit
