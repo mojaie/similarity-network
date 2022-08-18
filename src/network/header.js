@@ -71,16 +71,18 @@ function sessionMenu(selection) {
       .call(badge.loadingCircle);
 }
 
-function updateSessionMenu(selection) {
-  // TODO: idb
-  const sessionIDs = []
+function updateSessionMenu(selection, state, sessions, sessionIDs) {
   const currentSessionID = null
   // switch
   selection.select('.switch')
-      .call(lbox.updateSelectBoxOptions, sessionIDs)
+      .call(lbox.updateSelectBoxOptions, sessions)
       .call(lbox.updateSelectBoxValue, currentSessionID)
-      .on('change', () => {
-        
+      .on('change', event => {
+        const value = d3.select(event.currentTarget).select("input").property("selectedIndex");
+        // confirm save
+        // idb retreive
+        // new state
+        // update all
       });
   // open
   selection.select('.open')

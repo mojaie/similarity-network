@@ -16,9 +16,8 @@ function transform2(selection, state) {
 }
 
 function resize(selection, state) {
-  const area = selection.node();
-  const width = area.offsetWidth;
-  const height = area.offsetHeight;
+  const width = selection.property("offsetWidth");
+  const height = selection.property("offsetHeight");
   selection.select('.view')
       .attr('viewBox', `0 0 ${width} ${height}`)
     .select('.boundary')

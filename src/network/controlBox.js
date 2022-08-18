@@ -17,7 +17,7 @@ import {default as force} from './force.js';
 
 
 
-function LayoutControlBox(selection, state) {
+function LayoutControlBox(selection) {
   // Fit
   selection.append('div')
       .classed('mb-0', true)
@@ -129,7 +129,7 @@ function updateLayoutControl(selection, state) {
     - select/deselect all
 */
 
-function FilterControlBox(selection, state) {
+function FilterControlBox(selection) {
   // New filter
   selection.append('div')
       .classed('mb-3', true)
@@ -147,7 +147,7 @@ function updateFilterControl(selection, state) {
 
 
 
-function NodeControlBox(selection, state) {
+function NodeControlBox(selection) {
   // Node color
   selection.append('div')
     .classed('mb-1', true)
@@ -159,8 +159,7 @@ function NodeControlBox(selection, state) {
       .classed('mb-1', true)
       .classed('ms-3', true)
       .classed('gx-0', true)
-      .call(lbox.selectBox, 'Field')
-      .call(lbox.updateSelectBoxOptions, state.nodeFields);
+      .call(lbox.selectBox, 'Field');
   // Color range preset
   selection.append('div')
       .classed('colorrange', true)
@@ -189,8 +188,7 @@ function NodeControlBox(selection, state) {
       .classed('mb-1', true)
       .classed('ms-3', true)
       .classed('gx-0', true)
-      .call(lbox.selectBox, 'Field')
-      .call(lbox.updateSelectBoxOptions, state.nodeFields);
+      .call(lbox.selectBox, 'Field');
   // Size range preset
   selection.append('div')
       .classed('sizerange', true)
@@ -226,8 +224,7 @@ function NodeControlBox(selection, state) {
       .classed('mb-1', true)
       .classed('ms-3', true)
       .classed('gx-0', true)
-      .call(lbox.selectBox, 'Field')
-      .call(lbox.updateSelectBoxOptions, state.nodeFields);
+      .call(lbox.selectBox, 'Field');
   // Label font size
   selection.append('div')
       .classed('labelsize', true)
@@ -264,6 +261,7 @@ function NodeControlBox(selection, state) {
 
 function updateNodeControl(selection, state) {
   selection.select('.colorfield')
+      .call(lbox.updateSelectBoxOptions, state.nodeFields)
       .call(lbox.updateSelectBoxValue, state.appearance.nodeColor.field)
       .on('change', () => {
         state.appearance.nodeColor.field = lbox.selectBoxValue(selection);
@@ -283,6 +281,7 @@ function updateNodeControl(selection, state) {
       });
 
   selection.select('.sizefield')
+      .call(lbox.updateSelectBoxOptions, state.nodeFields)
       .call(lbox.updateSelectBoxValue, state.appearance.nodeSize.field)
       .on('change', () => {
         state.appearance.nodeSize.field = lbox.selectBoxValue(selection);
@@ -308,6 +307,7 @@ function updateNodeControl(selection, state) {
         state.updateNodeAttrNotifier();
       });
   selection.select('.labelfield')
+      .call(lbox.updateSelectBoxOptions, state.nodeFields)
       .call(lbox.updateSelectBoxValue, state.appearance.nodeLabel.field)
       .on('change', () => {
         state.appearance.nodeLabel.field = lbox.selectBoxValue(selection);
@@ -335,7 +335,7 @@ function updateNodeControl(selection, state) {
       });
 }
 
-function EdgeControlBox(selection, state) {
+function EdgeControlBox(selection) {
   // Edge color
   selection.append('div')
     .classed('mb-1', true)
@@ -347,8 +347,7 @@ function EdgeControlBox(selection, state) {
       .classed('mb-1', true)
       .classed('ms-3', true)
       .classed('gx-0', true)
-      .call(lbox.selectBox, 'Field')
-      .call(lbox.updateSelectBoxOptions, state.edgeFields);
+      .call(lbox.selectBox, 'Field');
   // Color range preset
   selection.append('div')
       .classed('colorrange', true)
@@ -377,8 +376,7 @@ function EdgeControlBox(selection, state) {
       .classed('mb-1', true)
       .classed('ms-3', true)
       .classed('gx-0', true)
-      .call(lbox.selectBox, 'Field')
-      .call(lbox.updateSelectBoxOptions, state.edgeFields);
+      .call(lbox.selectBox, 'Field');
   // Width range preset
   selection.append('div')
       .classed('widthrange', true)
@@ -414,8 +412,7 @@ function EdgeControlBox(selection, state) {
       .classed('mb-1', true)
       .classed('ms-3', true)
       .classed('gx-0', true)
-      .call(lbox.selectBox, 'Field')
-      .call(lbox.updateSelectBoxOptions, state.edgeFields);
+      .call(lbox.selectBox, 'Field');
   // Label font size
   selection.append('div')
       .classed('labelsize', true)
@@ -450,6 +447,7 @@ function EdgeControlBox(selection, state) {
 
 function updateEdgeControl(selection, state) {
   selection.select('.colorfield')
+      .call(lbox.updateSelectBoxOptions, state.edgeFields)
       .call(lbox.updateSelectBoxValue, state.appearance.edgeColor.field)
       .on('change', () => {
         state.appearance.edgeColor.field = lbox.selectBoxValue(selection);
@@ -469,6 +467,7 @@ function updateEdgeControl(selection, state) {
       });
 
   selection.select('.widthfield')
+      .call(lbox.updateSelectBoxOptions, state.edgeFields)
       .call(lbox.updateSelectBoxValue, state.appearance.edgeWidth.field)
       .on('change', () => {
         state.appearance.edgeWidth.field = lbox.selectBoxValue(selection);
@@ -494,6 +493,7 @@ function updateEdgeControl(selection, state) {
         state.updateEdgeAttrNotifier();
       });
   selection.select('.labelfield')
+      .call(lbox.updateSelectBoxOptions, state.edgeFields)
       .call(lbox.updateSelectBoxValue, state.appearance.edgeLabel.field)
       .on('change', () => {
         state.appearance.edgeLabel.field = lbox.selectBoxValue(selection);
@@ -536,7 +536,7 @@ function updateEdgeControl(selection, state) {
 */
 
 
-function StatisticsBox(selection, state) {
+function StatisticsBox(selection) {
   selection
       .classed('small', true);
   // Components
@@ -604,35 +604,35 @@ function controlBox(selection, state) {
       .call(cbox.controlBoxNav, 'control-layout', 'Layout', true);
   content.append('div')
       .call(cbox.controlBoxItem, 'control-layout', true)
-      .call(LayoutControlBox, state);
+      .call(LayoutControlBox);
 
   // Filter
   tabs.append('li')
       .call(cbox.controlBoxNav, 'control-filter', 'Filter', false);
   content.append('div')
       .call(cbox.controlBoxItem, 'control-filter', false)
-      .call(FilterControlBox, state);
+      .call(FilterControlBox);
 
   // Node
   tabs.append('li')
       .call(cbox.controlBoxNav, 'control-node', 'Node', false);
   content.append('div')
       .call(cbox.controlBoxItem, 'control-node', false)
-      .call(NodeControlBox, state);
+      .call(NodeControlBox);
 
   // Edge
   tabs.append('li')
       .call(cbox.controlBoxNav, 'control-edge', 'Edge', false);
   content.append('div')
       .call(cbox.controlBoxItem, 'control-edge', false)
-      .call(EdgeControlBox, state);
+      .call(EdgeControlBox);
 
   // Statistics
   tabs.append('li')
       .call(cbox.controlBoxNav, 'control-stat', 'Statistics', false);
   content.append('div')
       .call(cbox.controlBoxItem, 'control-stat', false)
-      .call(StatisticsBox, state);
+      .call(StatisticsBox);
 
   state.updateControlBoxNotifier = () => {
     selection.call(updateControlBox, state);

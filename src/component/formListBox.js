@@ -11,7 +11,7 @@ import {default as shape} from './shape.js';
 
 /**
  * Render select box components
- * @param {d3.selection} selection - selection of box container (div element)
+ * @param {*} selection - selection of box container (div element)
  */
 function selectBox(selection, label) {
   selection
@@ -42,8 +42,13 @@ function updateSelectBoxOptions(selection, items) {
 function updateSelectBoxValue(selection, value) {
   selection.select('.form-select').property('value', value);
 }
+
 function selectBoxValue(selection) {
   return selection.select('.form-select').property('value');
+}
+
+function selectBoxValueIndex(selection) {
+  return selection.select('.form-select').property('selectedIndex');
 }
 
 

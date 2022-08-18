@@ -872,9 +872,8 @@ var app = (function (d3, _) {
   }
 
   function resize(selection, state) {
-    const area = selection.node();
-    const width = area.offsetWidth;
-    const height = area.offsetHeight;
+    const width = selection.property("offsetWidth");
+    const height = selection.property("offsetHeight");
     selection.select('.view')
         .attr('viewBox', `0 0 ${width} ${height}`)
       .select('.boundary')
@@ -3589,16 +3588,18 @@ var app = (function (d3, _) {
         .call(badge$1.loadingCircle);
   }
 
-  function updateSessionMenu(selection) {
-    // TODO: idb
-    const sessionIDs = [];
+  function updateSessionMenu(selection, state, sessions, sessionIDs) {
     const currentSessionID = null;
     // switch
     selection.select('.switch')
-        .call(lbox.updateSelectBoxOptions, sessionIDs)
+        .call(lbox.updateSelectBoxOptions, sessions)
         .call(lbox.updateSelectBoxValue, currentSessionID)
-        .on('change', () => {
-          
+        .on('change', event => {
+          d3__default["default"].select(event.currentTarget).select("input").property("selectedIndex");
+          // confirm save
+          // idb retreive
+          // new state
+          // update all
         });
     // open
     selection.select('.open')

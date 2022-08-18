@@ -22,32 +22,8 @@ import {default as interaction} from './network/interaction.js';
 import {default as header} from './network/header.js';
 
 
-function updateApp(state) {
-  // Title
-  d3.select('title').text(state.name);
-
-  // Status
-  d3.select('#menubar .name').text(state.name);
-
-  const onLoading = d3.select('#menubar .loading-circle');
-
-  // Dialogs
-  const dialogs = d3.select('#dialogs');
-
-  // Rename dialog
-  dialogs.select('.renamed')
-      .call(renameDialog.updateBody, state.name)
-      .on('submit', function () {
-        onLoading.style('display', 'inline-block');
-        state.name = renameDialog.value(d3.select(this));
-        updateApp(state);
-      });
-
-  onLoading.style('display', 'none');
-}
-
-
 async function run() {
+  // Check web browser compatibility
   const err = client.compatibility();
   if (err) {
     d3.select('body')
@@ -56,16 +32,26 @@ async function run() {
     return;
   }
 
-  const sessionMenu = d3.select('#header-session')
+  // Render contents
+  d3.select('#header-session')
       .call(header.sessionMenu);
-  const snapshotMenu = d3.select('#header-snapshot')
+  d3.select('#header-snapshot')
       .call(header.snapshotMenu);
+  d3.select('#frame')
+    .append('svg')
+      .attr("id", "view")
+      .call(component.viewComponent)
+      .call(interaction.interactionComponent);
+  d3.select('#control')
+      .call(control.controlBox);
+
   const dialogs = d3.select('#dialogs');
+  // append dialogs
+  // rename
+  // confirm
 
 
-  // TODO:
-  // idb config defaultWorkspaceを取りに行く
-  // あれば表示
+  // TODO: get state
 
   // stub
   const stub = {
@@ -89,26 +75,46 @@ async function run() {
   state.fieldWidth = 1200;
   state.fieldHeight = 1200;
 
-  // Contents
-  const frame = d3.select('#frame')
-      .call(transform.viewFrame, state);
-  frame.select('.view')
-      .call(component.networkView, state)
-      .call(force.activate, state)
+  setState(state);
+}
+
+
+function setState(state) {
+  // Title
+  d3.select('title').text(state.name);
+
+  // Dialogs
+
+  // Rename dialog
+  /*
+  const dialogs = d3.select('#dialogs');
+  dialogs.select('.renamed')
+      .call(renameDialog.updateBody, state.name)
+      .on('submit', function () {
+        onLoading.style('display', 'inline-block');
+        state.name = renameDialog.value(d3.select(this));
+        updateApp(state);
+      });
+
+  onLoading.style('display', 'none');
+  */
+
+  d3.select("#view")
+      .call(component.updateView, state)
+      .call(force.setForce, state)
       .call(interaction.setInteraction, state);
   d3.select('#control')
-      .call(control.controlBox, state);
+      .call(control.updateControlBox, state);
 
   // Resize window
   window.onresize = () =>
     d3.select('#frame').call(transform.resize, state);
 
-  // Update
+  d3.select('#frame').call(transform.resize, state);
   //state.updateAllNotifier();
-  //updateApp(state);
 }
 
 
 export default {
-  run
+  run, setState
 };

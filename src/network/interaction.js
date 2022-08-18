@@ -169,7 +169,7 @@ function resume(selection, tf) {
 }
 
 
-function setInteraction(selection, state) {
+function interactionComponent(selection) {
   // Rectangle selection layer
   selection.append('g')
       .classed('interactions', true)
@@ -180,7 +180,10 @@ function setInteraction(selection, state) {
       .attr('stroke-width', 1)
       .attr('stroke-dasharray', '5,5')
       .attr('visibility', 'hidden');
+}
 
+
+function setInteraction(selection, state) {
   // Background click to clear selection
   selection
       .on('touchstart', event => { event.preventDefault(); })
@@ -234,5 +237,5 @@ function setInteraction(selection, state) {
 
 
 export default {
-  dragListener, zoomListener, setInteraction
+  dragListener, zoomListener, interactionComponent, setInteraction
 };

@@ -179,16 +179,48 @@ function move(selection, node, state, x, y) {
 }
 
 
-function networkView(selection, state) {
-  selection.call(transform.view, state);
-  const field = selection.select('.field');
-  const edges = field.append('g').classed('edge-layer', true);
-  const nodes = field.append('g').classed('node-layer', true);
-  const legendGroup = selection.append('g')
-      .classed('legends', true);
-  legendGroup.append('g')
+function viewComponent(selection) {
+  selection
+      .attr('preserveAspectRatio', 'xMinYMin meet')
+      .attr('pointer-events', 'all')
+      .attr('viewBox', "0 0 0 0");
+
+  // Boundary
+  selection.append('rect')
+      .classed('boundary', true)
+      .attr('x', 0)
+      .attr('y', 0)
+      .attr('width', 0)
+      .attr('height', 0)
+      .attr('fill', '#ffffff')
+      .attr('stroke-width', 1)
+      .attr('stroke', '#cccccc');
+
+  // Field
+  const field = selection.append('g')
+      .classed('field', true)
+      .style('opacity', 1e-6)
+  field.transition()
+      .duration(1000)
+      .style('opacity', 1);
+  field.append('g').classed('edge-layer', true);
+  field.append('g').classed('node-layer', true);
+
+  selection.append('g')
+      .classed('legends', true)
+    .append('g')
       .classed('nodecolor', true)
       .call(legend.colorBarLegend);
+}
+
+
+function updateView(selection, state) {
+  selection
+      .attr('viewBox', `0 0 ${state.viewBox.right} ${state.viewBox.bottom}`);
+  selection.select(".boundary")
+      .attr('width', state.viewBox.right)
+      .attr('height', state.viewBox.bottom)
+
   // Apply changes in datasets
   state.updateAllNotifier = () => {
     state.updateFilter();
@@ -204,18 +236,18 @@ function networkView(selection, state) {
     state.updateInteractionNotifier();  // Apply drag events to each nodes
   };
   state.updateNodeNotifier = () => {
-    nodes.call(updateNodes, state.vnodes);
+    selection.select(".node-layer").call(updateNodes, state.vnodes);
     // state.updateLegendNotifier();
   };
   state.updateEdgeNotifier = () => {
-    edges.call(updateEdges, state.vedges);
+    selection.select(".edge-layer").call(updateEdges, state.vedges);
   };
   state.updateNodeAttrNotifier = () => {
-    nodes.call(updateNodeAttrs, state);
+    selection.select(".node-layer").call(updateNodeAttrs, state);
     // state.updateLegendNotifier();
   };
   state.updateEdgeAttrNotifier = () => {
-    edges.call(updateEdgeAttrs, state);
+    selection.select(".edge-layer").call(updateEdgeAttrs, state);
   };
   /*
   state.updateLegendNotifier = () => {
@@ -233,5 +265,5 @@ export default {
   updateNodes, updateEdges, updateNodeCoords, updateEdgeCoords,
   updateNodeAttrs, updateEdgeAttrs, updateNodeSelection,
   updateAttrs, updateComponents,
-  move, moveEdge, networkView
+  move, moveEdge, viewComponent, updateView
 };

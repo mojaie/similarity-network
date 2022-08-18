@@ -88,7 +88,7 @@ function unstick(selection, simulation, state) {
 }
 
 
-function activate(selection, state) {
+function setForce(selection, state) {
   state.setForceNotifier = () => {
     const simulation = forceSimulation(
         state.config.forceParam, state.fieldWidth, state.fieldHeight);
@@ -129,5 +129,5 @@ function activate(selection, state) {
 
 
 export default {
-  forceParam, forceSimulation, activate
+  forceParam, forceSimulation, setForce
 };
