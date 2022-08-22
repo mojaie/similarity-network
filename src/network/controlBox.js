@@ -9,7 +9,6 @@ import {default as cscale} from '../common/scale.js';
 
 import {default as badge} from '../component/badge.js';
 import {default as box} from '../component/formBox.js';
-import {default as cbox} from '../component/controlBox.js';
 import {default as lbox} from '../component/formListBox.js';
 import {default as button} from '../component/button.js';
 
@@ -260,24 +259,25 @@ function NodeControlBox(selection) {
 }
 
 function updateNodeControl(selection, state) {
+  selection.on('change', () => {
+    state.updateNodeAttrNotifier();
+  });
+
   selection.select('.colorfield')
       .call(lbox.updateSelectBoxOptions, state.nodeFields)
       .call(lbox.updateSelectBoxValue, state.appearance.nodeColor.field)
       .on('change', () => {
         state.appearance.nodeColor.field = lbox.selectBoxValue(selection);
-        state.updateNodeAttrNotifier();
       });
   selection.select('.colorrange')
       .call(lbox.updateColorScaleBox, state.appearance.nodeColor.rangePreset)
       .on('change', () => {
         state.appearance.nodeColor.rangePreset = lbox.colorScaleBoxValue(selection);
-        state.updateNodeAttrNotifier();
       });
   selection.select('.colorscale')
       .call(lbox.updateSelectBoxValue, state.appearance.nodeColor.scale)
       .on('change', () => {
         state.appearance.nodeColor.scale = lbox.selectBoxValue(selection);
-        state.updateNodeAttrNotifier();
       });
 
   selection.select('.sizefield')
@@ -285,53 +285,49 @@ function updateNodeControl(selection, state) {
       .call(lbox.updateSelectBoxValue, state.appearance.nodeSize.field)
       .on('change', () => {
         state.appearance.nodeSize.field = lbox.selectBoxValue(selection);
-        state.updateNodeAttrNotifier();
       });
   selection.select('.sizerange')
       .call(lbox.updateSelectBoxValue, state.appearance.nodeSize.rangePreset)
       .on('change', () => {
         state.appearance.nodeSize.rangePreset = lbox.selectBoxValue(selection);
-        state.updateNodeAttrNotifier();
       });
   selection.select('.sizescale')
       .call(lbox.updateSelectBoxValue, state.appearance.nodeSize.scale)
       .on('change', () => {
         state.appearance.nodeSize.scale = lbox.selectBoxValue(selection);
-        state.updateNodeAttrNotifier();
       });
 
   selection.select('.labelvisible')
       .call(box.updateCheckBox, state.appearance.nodeLabel.visible)
       .on('change', () => {
         state.appearance.nodeLabel.visible = box.checkBoxValue(selection);
-        state.updateNodeAttrNotifier();
       });
   selection.select('.labelfield')
       .call(lbox.updateSelectBoxOptions, state.nodeFields)
       .call(lbox.updateSelectBoxValue, state.appearance.nodeLabel.field)
       .on('change', () => {
         state.appearance.nodeLabel.field = lbox.selectBoxValue(selection);
-        state.updateNodeAttrNotifier();
       });
   selection.select('.labelsize')
       .call(box.updateFormValue, state.appearance.nodeLabel.size)
       .on('change', () => {
         state.appearance.nodeLabel.size = box.formValue(selection);
-        state.updateNodeAttrNotifier();
       });
 
   selection.select('.shownodeimage')
       .call(box.updateCheckBox, state.config.alwaysShowNodeImage)
-      .on('change', () => {
+      .on('change', event => {
         state.config.alwaysShowNodeImage = box.checkBoxValue(selection);
         state.updateComponentNotifier();
+        event.stopPropagation();
       });
 
   selection.select('.legend')
       .call(lbox.updateSelectBoxValue, state.config.legendOrient)
-      .on('change', () => {
+      .on('change', event => {
         state.config.legendOrient = lbox.selectBoxValue(selection);
         //state.updateLegendNotifier();
+        event.stopPropagation();
       });
 }
 
@@ -584,7 +580,41 @@ function updateStatistics(selection, state) {
 
 
 
-function controlBox(selection, state) {
+
+function controlBoxNav(selection, id, label, active) {
+  selection
+      .classed('nav-item', true)
+      .attr('role', 'presentation')
+    .append("button")
+      .classed('nav-link', true)
+      .classed('active', active)
+      .classed('py-1', true)
+      .attr('id', `${id}-tab`)
+      .attr('data-bs-toggle', 'tab')
+      .attr('data-bs-target', `#${id}`)
+      .attr('type', 'button')
+      .attr('role', 'tab')
+      .attr('aria-controls', id)
+      .attr('aria-selected', active ? "true" : "false")
+      .text(label);
+}
+
+
+function controlBoxItem(selection, id, active) {
+  selection
+      .classed('tab-pane', true)
+      .classed('fade', true)
+      .classed('px-0', true)
+      .classed('show', active)
+      .classed('active', active)
+      .attr('id', id)
+      .attr('role', 'tabpanel')
+      .attr('aria-labelledby', `${id}-tab`);
+}
+
+
+
+function controlBox(selection) {
   // Clean up
   selection.select(".nav-tabs").remove();
   selection.select(".tab-content").remove();
@@ -601,42 +631,38 @@ function controlBox(selection, state) {
 
   // Layout
   tabs.append('li')
-      .call(cbox.controlBoxNav, 'control-layout', 'Layout', true);
+      .call(controlBoxNav, 'control-layout', 'Layout', true);
   content.append('div')
-      .call(cbox.controlBoxItem, 'control-layout', true)
+      .call(controlBoxItem, 'control-layout', true)
       .call(LayoutControlBox);
 
   // Filter
   tabs.append('li')
-      .call(cbox.controlBoxNav, 'control-filter', 'Filter', false);
+      .call(controlBoxNav, 'control-filter', 'Filter', false);
   content.append('div')
-      .call(cbox.controlBoxItem, 'control-filter', false)
+      .call(controlBoxItem, 'control-filter', false)
       .call(FilterControlBox);
 
   // Node
   tabs.append('li')
-      .call(cbox.controlBoxNav, 'control-node', 'Node', false);
+      .call(controlBoxNav, 'control-node', 'Node', false);
   content.append('div')
-      .call(cbox.controlBoxItem, 'control-node', false)
+      .call(controlBoxItem, 'control-node', false)
       .call(NodeControlBox);
 
   // Edge
   tabs.append('li')
-      .call(cbox.controlBoxNav, 'control-edge', 'Edge', false);
+      .call(controlBoxNav, 'control-edge', 'Edge', false);
   content.append('div')
-      .call(cbox.controlBoxItem, 'control-edge', false)
+      .call(controlBoxItem, 'control-edge', false)
       .call(EdgeControlBox);
 
   // Statistics
   tabs.append('li')
-      .call(cbox.controlBoxNav, 'control-stat', 'Statistics', false);
+      .call(controlBoxNav, 'control-stat', 'Statistics', false);
   content.append('div')
-      .call(cbox.controlBoxItem, 'control-stat', false)
+      .call(controlBoxItem, 'control-stat', false)
       .call(StatisticsBox);
-
-  state.updateControlBoxNotifier = () => {
-    selection.call(updateControlBox, state);
-  };
 }
 
 
@@ -651,6 +677,10 @@ function updateControlBox(selection, state) {
       .call(updateEdgeControl, state);
   selection.select('#control-stat')
       .call(updateStatistics, state);
+
+  state.updateControlBoxNotifier = () => {
+    selection.call(updateControlBox, state);
+  };
 }
 
 

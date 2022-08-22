@@ -9,6 +9,7 @@ export default class NetworkState extends TransformState {
     super(1200, 1200, null);
     // Session properties
     this.sessionName = session.name;
+    this.sessionID = session.id;
 
     this.nodes = session.nodes;
     this.nodeFields = [...this.nodes.reduce((a, b) => {
@@ -52,21 +53,19 @@ export default class NetworkState extends TransformState {
     this.showNodeImage = false;
     this.showEdge = false;
 
-    // Force
-    this.forceActive = true;  // TODO: if no initial positions
-
     // Event listeners
     this.zoomListener = null;
     this.dragListener = null;
 
     // Event notifiers
-    this.updateAllNotifier = null;
-    this.updateComponentNotifier = null;
-    this.updateNodeNotifier = null;
-    this.updateEdgeNotifier = null;
-    this.updateNodeAttrNotifier = null;
-    this.updateEdgeAttrNotifier = null;
-    this.updateLegendNotifier = null;
+    this.updateAllNotifier = () => {};
+    this.updateComponentNotifier = () => {};
+    this.updateNodeNotifier = () => {};
+    this.updateEdgeNotifier = () => {};
+    this.updateNodeAttrNotifier = () => {};
+    this.updateEdgeAttrNotifier = () => {};
+    this.updateLegendNotifier = () => {};
+    this.updateHeaderNotifier = () => {};
     this.updateControlBoxNotifier = () => {};
     this.updateInteractionNotifier = () => {};
     this.fitNotifier = () => {};
@@ -77,17 +76,18 @@ export default class NetworkState extends TransformState {
     this.tickCallback = () => {};
 
     // Initialize snapshot
-    let snapshot = {};
-    if (session.hasOwnProperty("snapshots") && session.snapshots.length > 0) {
-      snapshot = session.snapshots.slice(-1)[0];
-    }
-    this.applySnapshot(snapshot)
+    this.stateChanged = true;  // if true, there are unsaved changes
+    this.snapshots = session.snapshots || [];
+    if (this.snapshots.length == 0) { this.snapshots.push({}); }
+    this.snapshotIndex = this.snapshots.length - 1;
+    this.applySnapshot(this.snapshots[this.snapshotIndex]);
   }
 
   applySnapshot(snapshot) {
     this.name = snapshot.hasOwnProperty("name") ? snapshot.name : "default";
     this.filters = snapshot.hasOwnProperty("filters") ? snapshot.filters : [];
-    this.positions = snapshot.hasOwnProperty("positions") ? snapshot.filters : [];
+    this.positions = snapshot.hasOwnProperty("positions") ? snapshot.positions : [];
+    this.forceActive = !snapshot.hasOwnProperty("positions");
     this.config = snapshot.hasOwnProperty("config") ? snapshot.config : {
       showNodeImageThreshold: 100,
       alwaysShowNodeImage: false,
@@ -121,14 +121,18 @@ export default class NetworkState extends TransformState {
         field: null, size: 12, visible: false
       }
     };
+    this.updateAllNotifier();
   }
 
-  takeSnapshot() {
-    // TODO: save coords
+  saveSnapshot() {
+    const today = new Date();
+    const positions = this.nodes.forEach(e => {
+      return {x: e.x || 0.0, y: e.y || 0.0}
+    });
     return {
-      name: this.name,
+      name: `snapshot - ${today.toLocaleString('jp')}`,
       filters: this.filters,
-      positions: this.positions,
+      positions: positions,
       config: this.config,
       appearance: this.appearance
     }
@@ -218,13 +222,13 @@ export default class NetworkState extends TransformState {
   }
 
   updateVisibility() {
-    this.vnodes = this.fnodes; /*this.fnodes.filter(e => {
+    this.vnodes = this.fnodes.filter(e => {
       return e.y > this.focusArea.top && e.x > this.focusArea.left
         && e.y < this.focusArea.bottom && e.x < this.focusArea.right;
-    });*/
-    this.vedges = this.fedges; /*this.fedges.filter(e => {
+    });
+    this.vedges = this.fedges.filter(e => {
       return this.vnodes.includes(e.__source) || this.vnodes.includes(e.__target);
-    });*/
+    });
   }
 
 }

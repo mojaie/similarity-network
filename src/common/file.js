@@ -26,7 +26,7 @@ function parseJSON(data, compressed) {
 
 
 function loadJSON(file) {
-  const compressed = file.name.endsWith('c') || file.name.endsWith('.gz');
+  const compressed = file.name.endsWith('.gz');
   return readFile(file, false, compressed)
     .then(data => parseJSON(data, compressed));
 }
@@ -34,7 +34,7 @@ function loadJSON(file) {
 
 function fetchJSON(url) {
   const decoded = decodeURIComponent(url);
-  const compressed = decoded.endsWith('c') || decoded.endsWith('.gz');
+  const compressed = decoded.endsWith('.gz');
   return fetch(decoded)
     .then(res => compressed ? res.arrayBuffer() : res.json())
     .then(data => parseJSON(data, compressed));
@@ -65,8 +65,7 @@ function downloadDataFile(data, name) {
 function downloadJSON(json, name, compress=true) {
   const str = JSON.stringify(json);
   const data = compress ? pako.gzip(str) : str;
-  const ext = `.ap${compress ? 'c' : 'r'}`;
-  downloadDataFile(data, `${name}${ext}`);
+  downloadDataFile(data, `${name}.json${compress ? '.gz' : ''}`);
 }
 
 

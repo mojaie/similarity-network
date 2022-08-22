@@ -1,4 +1,4 @@
-var app = (function (d3, _) {
+var app = (function (d3, pako, _) {
   'use strict';
 
   function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
@@ -23,7 +23,78 @@ var app = (function (d3, _) {
 
   var d3__default = /*#__PURE__*/_interopDefaultLegacy(d3);
   var d3__namespace = /*#__PURE__*/_interopNamespace(d3);
+  var pako__default = /*#__PURE__*/_interopDefaultLegacy(pako);
   var ___default = /*#__PURE__*/_interopDefaultLegacy(_);
+
+  function readFile(file, sizeLimit, blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      const truncated = sizeLimit ? file.slice(0, sizeLimit) : file;
+      reader.onload = event => resolve(event.target.result);
+      reader.onerror = error => reject(error);
+      if (blob) {
+        reader.readAsArrayBuffer(truncated);
+      } else {
+        reader.readAsText(truncated);
+      }
+    });
+  }
+
+
+  function parseJSON(data, compressed) {
+    const text = compressed ? pako__default["default"].inflate(data, {to: 'string'}) : data;
+    return JSON.parse(text);
+  }
+
+
+  function loadJSON(file) {
+    const compressed = file.name.endsWith('.gz');
+    return readFile(file, false, compressed)
+      .then(data => parseJSON(data, compressed));
+  }
+
+
+  function fetchJSON(url) {
+    const decoded = decodeURIComponent(url);
+    const compressed = decoded.endsWith('.gz');
+    return fetch(decoded)
+      .then(res => compressed ? res.arrayBuffer() : res.json())
+      .then(data => parseJSON(data, compressed));
+  }
+
+
+  function downloadDataFile(data, name) {
+    try {
+      // cannot hundle large file with dataURI scheme
+      // url = 'data:application/json,' + encodeURIComponent(JSON.stringify(json))
+      const url = window.URL.createObjectURL(new Blob([data]));
+      const a = document.createElement('a');
+      a.download = name;
+      a.href = url;
+      // a.click() does not work on firefox
+      a.dispatchEvent(new MouseEvent('click', {
+        'view': window,
+        'bubbles': true,
+        'cancelable': false
+      }));
+      // window.URL.revokeObjectURL(url) does not work on firefox
+    } catch (e) {
+      // no DOM (unit testing)
+    }
+  }
+
+
+  function downloadJSON(json, name, compress=true) {
+    const str = JSON.stringify(json);
+    const data = compress ? pako__default["default"].gzip(str) : str;
+    downloadDataFile(data, `${name}.json${compress ? '.gz' : ''}`);
+  }
+
+
+  var hfile = {
+    readFile, parseJSON, loadJSON, fetchJSON,
+    downloadDataFile, downloadJSON
+  };
 
   function URLQuery() {
     const pairs = window.location.search.substring(1).split("&")
@@ -246,7 +317,7 @@ var app = (function (d3, _) {
     const tr = db.transaction(db.name).objectStore(db.name);
     return new Promise((resolve, reject) => {
       const req = tr.get(id);
-      req.onsuccess = event => resolve(event.target.result);
+      req.onsuccess = event => {console.log(event);resolve(event.target.result);};
       req.onerror = event => reject(event);
     });
   }
@@ -295,13 +366,36 @@ var app = (function (d3, _) {
    */
   async function appendSnapshot(sessionid, snapshot) {
     const db = await instance.session;
-    const tr = db.transaction(db.name).objectStore(db.name);
+    const tr = db.transaction(db.name, 'readwrite').objectStore(db.name);
     const data = await new Promise((resolve, reject) => {
       const req = tr.get(sessionid);
       req.onsuccess = event => resolve(event.target.result);
       req.onerror = event => reject(event);
     });
-    data.snapshot.push(snapshot);
+    data.snapshots.push(snapshot);
+    return new Promise((resolve, reject) => {
+      const req = tr.put(data);
+      req.onsuccess = () => resolve();
+      req.onerror = event => reject(event);
+    });
+  }
+
+  /**
+   * Rename snapshot
+   * @param {string} sessionid - session ID
+   * @param {Object} idx - snapshot index
+   * @param {string} name - new name
+   * @return {Promise} resolve with nothing
+   */
+   async function renameSnapshot(sessionid, idx, name) {
+    const db = await instance.session;
+    const tr = db.transaction(db.name, 'readwrite').objectStore(db.name);
+    const data = await new Promise((resolve, reject) => {
+      const req = tr.get(sessionid);
+      req.onsuccess = event => resolve(event.target.result);
+      req.onerror = event => reject(event);
+    });
+    data.snapshots[idx].name = name;
     return new Promise((resolve, reject) => {
       const req = tr.put(data);
       req.onsuccess = () => resolve();
@@ -311,19 +405,20 @@ var app = (function (d3, _) {
 
 
   /**
-   * Update package in the store
-   * @param {string} id - Package instance ID
-   * @param {function} updater - update function
+   * Delete snapshot
+   * @param {string} sessionid - session ID
+   * @param {Object} idx - snapshot index
+   * @return {Promise} resolve with nothing
    */
    async function deleteSnapshot(sessionid, idx) {
     const db = await instance.session;
-    const tr = db.transaction(db.name).objectStore(db.name);
+    const tr = db.transaction(db.name, 'readwrite').objectStore(db.name);
     const data = await new Promise((resolve, reject) => {
       const req = tr.get(sessionid);
       req.onsuccess = event => resolve(event.target.result);
       req.onerror = event => reject(event);
     });
-    data.snapshot.splice(idx, 1);
+    data.snapshots.splice(idx, 1);
     return new Promise((resolve, reject) => {
       const req = tr.put(data);
       req.onsuccess = () => resolve();
@@ -332,12 +427,12 @@ var app = (function (d3, _) {
   }
 
 
-  var idb$1 = {
+  var idb = {
     clear, clearAll,
     getConfig, putConfig,
     getSessionHeaders,
     getSession, putSession, deleteSession,
-    appendSnapshot, deleteSnapshot
+    appendSnapshot, renameSnapshot, deleteSnapshot
   };
 
   const assetBaseURL = './asset/';
@@ -437,151 +532,6 @@ var app = (function (d3, _) {
   var badge$1 = {
     badge, updateBadge, notify, loadingCircle,
     alert, updateAlert, invalidFeedback, updateInvalidMessage
-  };
-
-  const iconBaseURL = './asset/icon/';
-
-
-  function buttonBox(selection, label, type) {
-    selection
-        .classed('form-group', true)
-        .classed('mb-1', true)
-      .append('button')
-        .classed('btn', true)
-        .classed(`btn-${type}`, true)
-        .classed('btn-sm', true)
-        .text(label);
-  }
-
-
-  function menuButton(selection, label, type) {
-    selection
-        .classed('btn', true)
-        .classed(`btn-${type}`, true)
-        .classed(`btn-sm`, true)
-        .classed('mr-1', true)
-        .text(label);
-  }
-
-
-  function menuButtonLink(selection, label, type, icon) {
-    selection
-        .classed('btn', true)
-        .classed(`btn-${type}`, true)
-        .classed(`btn-sm`, true)
-        .classed('mr-1', true)
-        .attr('role', 'button')
-        .attr('href', '#');
-    selection.append('img')
-        .attr('src', icon ? `${iconBaseURL}${icon}.svg` : null)
-        .style('width', '1.25rem')
-        .style('height', '1.25rem');
-    selection.append('span')
-        .style('vertical-align', 'middle')
-        .text(label);
-  }
-
-
-  function menuModalLink(selection, target, label, type, icon) {
-    selection
-        .classed('btn', true)
-        .classed(`btn-${type}`, true)
-        .classed(`btn-sm`, true)
-        .classed('mr-1', true)
-        .attr('href', '#')
-        .attr('role', 'button')
-        .attr('data-toggle', 'modal')
-        .attr('data-target', `#${target}`);
-    selection.append('img')
-        .attr('src', icon ? `${iconBaseURL}${icon}.svg` : null)
-        .style('width', '1.25rem')
-        .style('height', '1.25rem');
-    selection.append('span')
-        .classed('label', true)
-        .style('vertical-align', 'middle')
-        .text(label);
-  }
-
-
-  function dropdownMenuButton(selection, label, type, icon) {
-    selection
-        .classed('btn-group', true)
-        .classed('mr-1', true);
-    const button = selection.append('button')
-        .classed('btn', true)
-        .classed(`btn-${type}`, true)
-        .classed('btn-sm', true)
-        .classed('dropdown-toggle', true)
-        .attr('data-toggle', 'dropdown');
-    button.append('img')
-        .attr('src', icon ? `${iconBaseURL}${icon}.svg` : null)
-        .style('width', '1.25rem')
-        .style('height', '1.25rem');
-    button.append('span')
-        .style('vertical-align', 'middle')
-        .text(label);
-    selection.append('div')
-        .classed('dropdown-menu', true);
-  }
-
-
-  function dropdownMenuItem(selection, label, icon) {
-    selection.classed('dropdown-item', true)
-        .attr('href', '#');
-    selection.append('img')
-        .attr('src', icon ? `${iconBaseURL}${icon}.svg` : null)
-        .classed('mr-1', true)
-        .style('width', '2rem')
-        .style('height', '2rem');
-    selection.append('span')
-        .text(label);
-  }
-
-  function dropdownMenuModal(selection, label, target, icon) {
-    selection.classed('dropdown-item', true)
-        .attr('href', '#')
-        .attr('data-toggle', 'modal')
-        .attr('data-target', `#${target}`);
-    selection.append('img')
-        .attr('src', `${iconBaseURL}${icon}.svg`)
-        .classed('mr-1', true)
-        .style('width', '2rem')
-        .style('height', '2rem');
-    selection.append('span')
-        .text(label);
-  }
-
-
-  function dropdownMenuFile(selection, label, accept, icon) {
-    selection.classed('dropdown-item', true)
-        .attr('href', '#')
-        .on('click', function () {
-          d3__default["default"].select(this).select('input').node().click();
-        });
-    selection.append('form')
-        .style('display', 'none')
-      .append('input')
-        .attr('type', 'file')
-        .attr('accept', accept);
-    selection.append('img')
-        .attr('src', `${iconBaseURL}${icon}.svg`)
-        .classed('mr-1', true)
-        .style('width', '2rem')
-        .style('height', '2rem');
-    selection.append('span')
-        .text(label);
-  }
-
-
-  function dropdownMenuFileValue(selection) {
-    return selection.select('input').node().files[0];
-  }
-
-
-  var button = {
-    iconBaseURL, buttonBox, menuButton, menuButtonLink, menuModalLink,
-    dropdownMenuButton, dropdownMenuItem, dropdownMenuModal,
-    dropdownMenuFile, dropdownMenuFileValue
   };
 
   const scales = {
@@ -787,6 +737,381 @@ var app = (function (d3, _) {
 
   var shape = {
     colorBar, setSize
+  };
+
+  /**
+   * Render select box components
+   * @param {*} selection - selection of box container (div element)
+   */
+  function selectBox(selection, label) {
+    selection
+        .classed('row', true);
+    selection.append('label')
+        .classed('col-form-label', true)
+        .classed('col-form-label-sm', true)
+        .classed('col-4', true)
+        .text(label);
+    selection.append('div')
+        .classed('col-8', true)
+      .append('select')
+        .classed('form-select', true)
+        .classed('form-select-sm', true);
+  }
+
+  function updateSelectBoxOptions(selection, items, keyfunc = d => d, namefunc = d => d) {
+    const options = selection.select('select')
+      .selectAll('option')
+        .data(items, keyfunc);
+    options.exit().remove();
+    options.enter()
+      .append('option')
+        .attr('value', keyfunc)
+        .text(namefunc);
+  }
+
+  function updateSelectBoxValue(selection, value) {
+    selection.select('.form-select').property('value', value);
+  }
+
+  function selectBoxValue(selection) {
+    return selection.select('.form-select').property('value');
+  }
+
+  function selectBoxValueIndex(selection) {
+    return selection.select('.form-select').property('selectedIndex');
+  }
+
+
+  /**
+   * Render select box components
+   * @param {d3.selection} selection - selection of box container (div element)
+   */
+  function checklistBox(selection, label) {
+    // TODO: scroll
+    selection
+        .classed('form-group', true)
+        .classed('form-row', true)
+        .classed('align-items-center', true);
+    const formLabel = selection.append('label')
+        .classed('col-form-label', true)
+        .classed('col-form-label-sm', true)
+        .classed('col-4', true)
+        .text(label);
+    formLabel.append('div')
+        .call(badge$1.invalidFeedback);
+    selection.append('ul')
+        .classed('form-control', true)
+        .classed('form-control-sm', true)
+        .classed('col-8', true);
+  }
+
+  function updateChecklistItems(selection, items) {
+    const listitems = selection.select('ul')
+      .selectAll('li')
+        .data(items, d => d.key);
+    listitems.exit().remove();
+    const form = listitems.enter()
+      .append('li')
+        .attr('class', 'form-check')
+      .append('label')
+        .attr('class', 'form-check-label');
+    form.append('input')
+        .attr('type', 'checkbox')
+        .attr('class', 'form-check-input')
+        .property('value', d => d.key);
+    form.append('span')
+        .text(d => d.name);
+  }
+
+  function checkRequired(selection) {
+    selection.selectAll('input')
+        .on('change', function () {
+          const valid = anyChecked(selection);
+          selection.call(setChecklistValidity, valid);
+        });
+  }
+
+  function updateChecklistValues(selection, values) {
+    selection.selectAll('input')
+      .each(function (d) {
+        d3__default["default"].select(this).property('checked', values.includes(d.key));
+      });
+    selection.call(setChecklistValidity, true);  // Clear validity state
+  }
+
+  function checklistValues(selection) {
+    return selection.selectAll('input:checked').data().map(d => d.key);
+  }
+
+  function anyChecked(selection) {
+    return checklistValues(selection).length > 0;
+  }
+
+  function setChecklistValidity(selection, valid) {
+    selection.select('.invalid-feedback')
+        .style('display', valid ? 'none': 'inherit');
+    selection.select('.form-control')
+        .style('background-color', valid ? null : 'LightPink');
+  }
+
+
+  function colorScaleBox(selection, label) {
+    selection
+        .classed('row', true);
+    selection.append('label')
+        .classed('col-form-label', true)
+        .classed('col-form-label-sm', true)
+        .classed('col-4', true)
+        .text(label);
+    const form = selection.append('div')
+        .classed('col-8', true)
+      .append('div')
+        .classed('form-control', true)
+        .classed('form-control-sm', true)
+        .classed('p-0', true);
+    const dropdown = form.append('div')
+        .classed('btn-group', true)
+        .classed('me-1', true);
+    dropdown.append('button')
+        .classed('btn', true)
+        .classed(`btn-light`, true)
+        .classed('btn-sm', true)
+        .classed('dropdown-toggle', true)
+        .attr('data-bs-toggle', 'dropdown')
+        .attr('aria-expanded', 'false');
+    dropdown.append('ul')
+        .classed('dropdown-menu', true)
+        .classed('py-0', true);
+    form.append('span')
+        .classed('selected', true);
+  }
+
+  function updateColorScaleItems(selection, items) {
+    const listitems = selection.select('.dropdown-menu')
+      .selectAll('li')
+        .data(items);
+    listitems.exit().remove();
+    listitems.enter()
+      .append('li')
+      .append('a')
+        .classed('dropdown-item', true)
+        .classed('py-0', true)
+        .attr('href', '#')
+        .attr('title', d => d)
+        .on('click', (event, d) => {
+          selection.call(setSelectedColorScale, d);
+          selection.dispatch('change', {bubbles: true});
+        })
+        .each((d, i, nodes) => {
+          const s = cscale.scales.color[d];
+          d3__default["default"].select(nodes[i])
+              .call(shape.colorBar(s.range), s.range, 80, d);
+        });
+  }
+
+  function setSelectedColorScale(selection, item) {
+    const selected = selection.select('.selected');
+    const s = cscale.scales.color[item];
+    selected.selectAll('svg').remove();
+    selected.datum(item);  // Bind selected item record
+    selected
+        .call(shape.colorBar(s.range), s.range, 80, item);
+  }
+
+  function updateColorScaleBox(selection, item) {
+    //const data = selection.select('.dropdown-menu')
+    //  .selectAll('li').data();
+    selection.call(setSelectedColorScale, item);
+  }
+
+  function colorScaleBoxValue(selection) {
+    return selection.select('.selected').datum();
+  }
+
+  function colorScaleBoxItem(selection) {
+    return cscale.scales.color[selection.select('.selected').datum()];
+  }
+
+
+  var lbox = {
+    selectBox, updateSelectBoxOptions, updateSelectBoxValue, selectBoxValue, selectBoxValueIndex,
+    checklistBox, updateChecklistItems, checkRequired, updateChecklistValues,
+    checklistValues, anyChecked, setChecklistValidity,
+    colorScaleBox, updateColorScaleItems, updateColorScaleBox,
+    colorScaleBoxValue, colorScaleBoxItem
+  };
+
+  const iconBaseURL = './asset/icon/';
+
+
+  function buttonBox(selection, label, type) {
+    selection
+        .classed('form-group', true)
+        .classed('mb-1', true)
+      .append('button')
+        .classed('btn', true)
+        .classed(`btn-${type}`, true)
+        .classed('btn-sm', true)
+        .text(label);
+  }
+
+
+  function menuButton(selection, label, type) {
+    selection
+        .classed('btn', true)
+        .classed(`btn-${type}`, true)
+        .classed(`btn-sm`, true)
+        .classed('mr-1', true)
+        .text(label);
+  }
+
+
+  function menuButtonLink(selection, label, type, icon) {
+    selection
+        .classed('btn', true)
+        .classed(`btn-${type}`, true)
+        .classed(`btn-sm`, true)
+        .classed('mr-1', true)
+        .attr('role', 'button')
+        .attr('href', '#');
+    selection.append('img')
+        .attr('src', icon ? `${iconBaseURL}${icon}.svg` : null)
+        .style('width', '1.25rem')
+        .style('height', '1.25rem');
+    selection.append('span')
+        .style('vertical-align', 'middle')
+        .text(label);
+  }
+
+
+  function menuModalLink(selection, target, label, type, icon) {
+    selection
+        .classed('btn', true)
+        .classed(`btn-${type}`, true)
+        .classed(`btn-sm`, true)
+        .classed('mr-1', true)
+        .attr('href', '#')
+        .attr('role', 'button')
+        .attr('data-toggle', 'modal')
+        .attr('data-target', `#${target}`);
+    selection.append('img')
+        .attr('src', icon ? `${iconBaseURL}${icon}.svg` : null)
+        .style('width', '1.25rem')
+        .style('height', '1.25rem');
+    selection.append('span')
+        .classed('label', true)
+        .style('vertical-align', 'middle')
+        .text(label);
+  }
+
+
+  function dropdownMenuButton(selection, label, type, icon) {
+    selection
+        .classed('btn-group', true)
+        .classed('mr-1', true);
+    const button = selection.append('button')
+        .classed('btn', true)
+        .classed(`btn-${type}`, true)
+        .classed('btn-sm', true)
+        .classed('dropdown-toggle', true)
+        .attr('data-toggle', 'dropdown');
+    button.append('img')
+        .attr('src', icon ? `${iconBaseURL}${icon}.svg` : null)
+        .style('width', '1.25rem')
+        .style('height', '1.25rem');
+    button.append('span')
+        .style('vertical-align', 'middle')
+        .text(label);
+    selection.append('div')
+        .classed('dropdown-menu', true);
+  }
+
+
+  function dropdownMenuItem(selection, label, icon) {
+    selection.classed('dropdown-item', true)
+        .attr('href', '#');
+    selection.append('img')
+        .attr('src', icon ? `${iconBaseURL}${icon}.svg` : null)
+        .classed('mr-1', true)
+        .style('width', '2rem')
+        .style('height', '2rem');
+    selection.append('span')
+        .text(label);
+  }
+
+  function dropdownMenuModal(selection, label, target, icon) {
+    selection.classed('dropdown-item', true)
+        .attr('href', '#')
+        .attr('data-toggle', 'modal')
+        .attr('data-target', `#${target}`);
+    selection.append('img')
+        .attr('src', `${iconBaseURL}${icon}.svg`)
+        .classed('mr-1', true)
+        .style('width', '2rem')
+        .style('height', '2rem');
+    selection.append('span')
+        .text(label);
+  }
+
+
+  function dropdownMenuFile(selection, label, accept, icon) {
+    selection.classed('dropdown-item', true)
+        .attr('href', '#')
+        .on('click', function () {
+          d3__default["default"].select(this).select('input').node().click();
+        });
+    selection.append('form')
+        .style('display', 'none')
+      .append('input')
+        .attr('type', 'file')
+        .attr('accept', accept);
+    selection.append('img')
+        .attr('src', `${iconBaseURL}${icon}.svg`)
+        .classed('mr-1', true)
+        .style('width', '2rem')
+        .style('height', '2rem');
+    selection.append('span')
+        .text(label);
+  }
+
+  function fileButton(selection, label, accept, icon) {
+      selection
+          .on('click', event => {
+            d3__default["default"].select(event.currentTarget).select('input').node().click();
+          });
+      selection.append('form')
+          .style('display', 'none')
+        .append('input')
+          .attr('type', 'file')
+          .attr('accept', accept);
+      selection.append('img')
+          .attr('src', `${iconBaseURL}${icon}.svg`)
+          .attr('title', label)
+          .classed('mr-1', true)
+          .style('width', '2rem')
+          .style('height', '2rem');
+      selection.append("span")
+          .text(label);
+    }
+
+  function fileValue(selection) {
+    return selection.select('input').node().files[0];
+  }
+
+  function menuIcon(selection, label, icon) {
+      selection.append('img')
+          .attr('src', icon ? `${iconBaseURL}${icon}.svg` : null)
+          .classed('mr-1', true)
+          .style('width', '2rem')
+          .style('height', '2rem');
+      selection.append('span')
+          .text(label);
+    }
+
+  var button = {
+    iconBaseURL, buttonBox, menuButton, menuButtonLink, menuModalLink,
+    dropdownMenuButton, dropdownMenuItem, dropdownMenuModal,
+    dropdownMenuFile, fileValue, fileButton, menuIcon
   };
 
   function colorBarLegend(selection) {
@@ -1001,41 +1326,6 @@ var app = (function (d3, _) {
   }
 
 
-  function textareaBox(selection, label, rows, placeholder) {
-    selection
-        .classed('form-group', true)
-        .classed('form-row', true);
-    const formLabel = selection.append('label')
-        .classed('col-form-label', true)
-        .classed('col-form-label-sm', true)
-        .classed('col-4', true)
-        .text(label);
-    formLabel.append('div')
-        .call(badge$1.invalidFeedback);
-    selection.append('textarea')
-        .classed('form-control', true)
-        .classed('form-control-sm', true)
-        .classed('col-8', true)
-        .attr('rows', rows)
-        .attr('placeholder', placeholder)
-        .on('input', function () {
-          const valid = textareaValid(selection);
-          selection.call(setValidity, valid);
-        });
-  }
-
-  function textareaBoxLines(selection) {
-    const value = selection.select('textarea').property('value');
-    if (value) return value.split('\n')
-      .map(e => e.replace(/^\s+|\s+$/g, ''))  // strip spaces
-      .filter(e => e.length > 0);
-    return [];
-  }
-
-  function textareaValid(selection) {
-    return /\s*?\w\s*?/.test(formValue(selection));
-  }
-
 
   function checkBox(selection, label) {
     const box = selection
@@ -1172,11 +1462,116 @@ var app = (function (d3, _) {
   var box = {
     updateFormValue, formValue, formValid, setValidity,
     textBox, readonlyBox, updateReadonlyValue, readonlyValue,
-    textareaBox, textareaBoxLines, textareaValid,
     numberBox, updateNumberRange,
     checkBox, updateCheckBox, checkBoxValue,
     colorBox,
     fileInputBox, clearFileInput, fileInputValue, fileInputValid
+  };
+
+  function dialogBase(selection) {
+    selection
+        .classed('modal', true)
+        .attr('tabindex', -1)
+        .attr('aria-hidden', true);
+    selection.append('div')
+        .classed('modal-dialog', true)
+      .append('div')
+        .classed('modal-content', true);
+  }
+
+
+  function confirmDialog(selection) {
+    const base = selection.call(dialogBase)
+        .select('.modal-content');
+    // body
+    base.append('div')
+        .classed('modal-body', true)
+      .append('div')
+        .classed('message', true);
+    // footer
+    const footer = base.append('div')
+        .classed('modal-footer', true);
+    footer.append('button')
+        .classed('btn', true)
+        .classed('btn-outline-secondary', true)
+        .classed('cancel', true)
+        .attr('type', 'button')
+        .attr('data-bs-dismiss', 'modal')
+        .text('Cancel');
+    footer.append('button')
+        .classed('btn', true)
+        .classed('btn-primary', true)
+        .classed('ok', true)
+        .attr('type', 'button')
+        .attr('data-bs-dismiss', 'modal')
+        .text('OK');
+  }
+
+
+  function updateConfirmDialog(selection, message) {
+    selection.select('.message').text(message);
+  }
+
+
+  function submitDialog(selection, title) {
+    const base = selection.call(dialogBase)
+        .select('.modal-content');
+    // header
+    const header = base.append('div')
+        .classed('modal-header', true);
+    header.append('h5')
+        .classed('modal-title', true)
+        .text(title);
+    header.append('button')
+        .attr('type', 'button')
+        .attr('data-dismiss', 'modal')
+        .attr('aria-label', 'Close')
+        .classed('close', true)
+      .append('span')
+        .attr('aria-hidden', true)
+        .html('&times;');
+    // body
+    base.append('div')
+        .classed('modal-body', true);
+    // footer
+    base.append('div')
+        .classed('modal-footer', true)
+      .append('button')
+        .classed('btn', true)
+        .classed('btn-primary', true)
+        .classed('submit', true)
+        .attr('type', 'button')
+        .attr('data-dismiss', 'modal')
+        .text('Submit');
+  }
+
+
+
+  function renameDialog(selection) {
+    const renameBox = selection.call(submitDialog, "Save snapshot")
+      .select('.modal-body').append('div')
+        .classed('name', true)
+        .call(box.textBox, 'Save snapshot');
+    renameBox.select('.form-control')
+        .attr('required', 'required');
+    renameBox.select('.invalid-feedback')
+        .call(badge$1.updateInvalidMessage, 'Please provide a valid name');
+  }
+
+
+  function updateRenameDialog(selection, name) {
+    selection.select('.name').call(box.updateFormValue, name);
+  }
+
+
+  function renameDialogValue(selection) {
+    return box.formValue(selection.select('.name'));
+  }
+
+
+  var modal = {
+    confirmDialog, updateConfirmDialog, submitDialog,
+    renameDialog, updateRenameDialog, renameDialogValue
   };
 
   class TransformState {
@@ -1275,6 +1670,7 @@ var app = (function (d3, _) {
       super(1200, 1200, null);
       // Session properties
       this.sessionName = session.name;
+      this.sessionID = session.id;
 
       this.nodes = session.nodes;
       this.nodeFields = [...this.nodes.reduce((a, b) => {
@@ -1318,21 +1714,19 @@ var app = (function (d3, _) {
       this.showNodeImage = false;
       this.showEdge = false;
 
-      // Force
-      this.forceActive = true;  // TODO: if no initial positions
-
       // Event listeners
       this.zoomListener = null;
       this.dragListener = null;
 
       // Event notifiers
-      this.updateAllNotifier = null;
-      this.updateComponentNotifier = null;
-      this.updateNodeNotifier = null;
-      this.updateEdgeNotifier = null;
-      this.updateNodeAttrNotifier = null;
-      this.updateEdgeAttrNotifier = null;
-      this.updateLegendNotifier = null;
+      this.updateAllNotifier = () => {};
+      this.updateComponentNotifier = () => {};
+      this.updateNodeNotifier = () => {};
+      this.updateEdgeNotifier = () => {};
+      this.updateNodeAttrNotifier = () => {};
+      this.updateEdgeAttrNotifier = () => {};
+      this.updateLegendNotifier = () => {};
+      this.updateHeaderNotifier = () => {};
       this.updateControlBoxNotifier = () => {};
       this.updateInteractionNotifier = () => {};
       this.fitNotifier = () => {};
@@ -1343,17 +1737,18 @@ var app = (function (d3, _) {
       this.tickCallback = () => {};
 
       // Initialize snapshot
-      let snapshot = {};
-      if (session.hasOwnProperty("snapshots") && session.snapshots.length > 0) {
-        snapshot = session.snapshots.slice(-1)[0];
-      }
-      this.applySnapshot(snapshot);
+      this.stateChanged = true;  // if true, there are unsaved changes
+      this.snapshots = session.snapshots || [];
+      if (this.snapshots.length == 0) { this.snapshots.push({}); }
+      this.snapshotIndex = this.snapshots.length - 1;
+      this.applySnapshot(this.snapshots[this.snapshotIndex]);
     }
 
     applySnapshot(snapshot) {
       this.name = snapshot.hasOwnProperty("name") ? snapshot.name : "default";
       this.filters = snapshot.hasOwnProperty("filters") ? snapshot.filters : [];
-      this.positions = snapshot.hasOwnProperty("positions") ? snapshot.filters : [];
+      this.positions = snapshot.hasOwnProperty("positions") ? snapshot.positions : [];
+      this.forceActive = !snapshot.hasOwnProperty("positions");
       this.config = snapshot.hasOwnProperty("config") ? snapshot.config : {
         showNodeImageThreshold: 100,
         alwaysShowNodeImage: false,
@@ -1387,14 +1782,18 @@ var app = (function (d3, _) {
           field: null, size: 12, visible: false
         }
       };
+      this.updateAllNotifier();
     }
 
-    takeSnapshot() {
-      // TODO: save coords
+    saveSnapshot() {
+      const today = new Date();
+      const positions = this.nodes.forEach(e => {
+        return {x: e.x || 0.0, y: e.y || 0.0}
+      });
       return {
-        name: this.name,
+        name: `snapshot - ${today.toLocaleString('jp')}`,
         filters: this.filters,
-        positions: this.positions,
+        positions: positions,
         config: this.config,
         appearance: this.appearance
       }
@@ -1484,833 +1883,16 @@ var app = (function (d3, _) {
     }
 
     updateVisibility() {
-      this.vnodes = this.fnodes; /*this.fnodes.filter(e => {
+      this.vnodes = this.fnodes.filter(e => {
         return e.y > this.focusArea.top && e.x > this.focusArea.left
           && e.y < this.focusArea.bottom && e.x < this.focusArea.right;
-      });*/
-      this.vedges = this.fedges; /*this.fedges.filter(e => {
+      });
+      this.vedges = this.fedges.filter(e => {
         return this.vnodes.includes(e.__source) || this.vnodes.includes(e.__target);
-      });*/
+      });
     }
 
   }
-
-  /**
-   * Render select box components
-   * @param {d3.selection} selection - selection of box container (div element)
-   */
-  function selectBox(selection, label) {
-    selection
-        .classed('row', true);
-    selection.append('label')
-        .classed('col-form-label', true)
-        .classed('col-form-label-sm', true)
-        .classed('col-4', true)
-        .text(label);
-    selection.append('div')
-        .classed('col-8', true)
-      .append('select')
-        .classed('form-select', true)
-        .classed('form-select-sm', true);
-  }
-
-  function updateSelectBoxOptions(selection, items) {
-    const options = selection.select('select')
-      .selectAll('option')
-        .data(items);
-    options.exit().remove();
-    options.enter()
-      .append('option')
-        .attr('value', d => d)
-        .text(d => d);
-  }
-
-  function updateSelectBoxValue(selection, value) {
-    selection.select('.form-select').property('value', value);
-  }
-  function selectBoxValue(selection) {
-    return selection.select('.form-select').property('value');
-  }
-
-
-  /**
-   * Render select box components
-   * @param {d3.selection} selection - selection of box container (div element)
-   */
-  function checklistBox(selection, label) {
-    // TODO: scroll
-    selection
-        .classed('form-group', true)
-        .classed('form-row', true)
-        .classed('align-items-center', true);
-    const formLabel = selection.append('label')
-        .classed('col-form-label', true)
-        .classed('col-form-label-sm', true)
-        .classed('col-4', true)
-        .text(label);
-    formLabel.append('div')
-        .call(badge$1.invalidFeedback);
-    selection.append('ul')
-        .classed('form-control', true)
-        .classed('form-control-sm', true)
-        .classed('col-8', true);
-  }
-
-  function updateChecklistItems(selection, items) {
-    const listitems = selection.select('ul')
-      .selectAll('li')
-        .data(items, d => d.key);
-    listitems.exit().remove();
-    const form = listitems.enter()
-      .append('li')
-        .attr('class', 'form-check')
-      .append('label')
-        .attr('class', 'form-check-label');
-    form.append('input')
-        .attr('type', 'checkbox')
-        .attr('class', 'form-check-input')
-        .property('value', d => d.key);
-    form.append('span')
-        .text(d => d.name);
-  }
-
-  function checkRequired(selection) {
-    selection.selectAll('input')
-        .on('change', function () {
-          const valid = anyChecked(selection);
-          selection.call(setChecklistValidity, valid);
-        });
-  }
-
-  function updateChecklistValues(selection, values) {
-    selection.selectAll('input')
-      .each(function (d) {
-        d3__default["default"].select(this).property('checked', values.includes(d.key));
-      });
-    selection.call(setChecklistValidity, true);  // Clear validity state
-  }
-
-  function checklistValues(selection) {
-    return selection.selectAll('input:checked').data().map(d => d.key);
-  }
-
-  function anyChecked(selection) {
-    return checklistValues(selection).length > 0;
-  }
-
-  function setChecklistValidity(selection, valid) {
-    selection.select('.invalid-feedback')
-        .style('display', valid ? 'none': 'inherit');
-    selection.select('.form-control')
-        .style('background-color', valid ? null : 'LightPink');
-  }
-
-
-  function colorScaleBox(selection, label) {
-    selection
-        .classed('row', true);
-    selection.append('label')
-        .classed('col-form-label', true)
-        .classed('col-form-label-sm', true)
-        .classed('col-4', true)
-        .text(label);
-    const form = selection.append('div')
-        .classed('col-8', true)
-      .append('div')
-        .classed('form-control', true)
-        .classed('form-control-sm', true)
-        .classed('p-0', true);
-    const dropdown = form.append('div')
-        .classed('btn-group', true)
-        .classed('me-1', true);
-    dropdown.append('button')
-        .classed('btn', true)
-        .classed(`btn-light`, true)
-        .classed('btn-sm', true)
-        .classed('dropdown-toggle', true)
-        .attr('data-bs-toggle', 'dropdown')
-        .attr('aria-expanded', 'false');
-    dropdown.append('ul')
-        .classed('dropdown-menu', true)
-        .classed('py-0', true);
-    form.append('span')
-        .classed('selected', true);
-  }
-
-  function updateColorScaleItems(selection, items) {
-    const listitems = selection.select('.dropdown-menu')
-      .selectAll('li')
-        .data(items);
-    listitems.exit().remove();
-    listitems.enter()
-      .append('li')
-      .append('a')
-        .classed('dropdown-item', true)
-        .classed('py-0', true)
-        .attr('href', '#')
-        .attr('title', d => d)
-        .on('click', (event, d) => {
-          selection.call(setSelectedColorScale, d);
-          selection.dispatch('change', {bubbles: true});
-        })
-        .each((d, i, nodes) => {
-          const s = cscale.scales.color[d];
-          d3__default["default"].select(nodes[i])
-              .call(shape.colorBar(s.range), s.range, 80, d);
-        });
-  }
-
-  function setSelectedColorScale(selection, item) {
-    const selected = selection.select('.selected');
-    const s = cscale.scales.color[item];
-    selected.selectAll('svg').remove();
-    selected.datum(item);  // Bind selected item record
-    selected
-        .call(shape.colorBar(s.range), s.range, 80, item);
-  }
-
-  function updateColorScaleBox(selection, item) {
-    //const data = selection.select('.dropdown-menu')
-    //  .selectAll('li').data();
-    selection.call(setSelectedColorScale, item);
-  }
-
-  function colorScaleBoxValue(selection) {
-    return selection.select('.selected').datum();
-  }
-
-  function colorScaleBoxItem(selection) {
-    return cscale.scales.color[selection.select('.selected').datum()];
-  }
-
-
-  var lbox = {
-    selectBox, updateSelectBoxOptions, updateSelectBoxValue, selectBoxValue,
-    checklistBox, updateChecklistItems, checkRequired, updateChecklistValues,
-    checklistValues, anyChecked, setChecklistValidity,
-    colorScaleBox, updateColorScaleItems, updateColorScaleBox,
-    colorScaleBoxValue, colorScaleBoxItem
-  };
-
-  /**
-   * Render range box components
-   * @param {d3.selection} selection - selection of box container (div element)
-   */
-  function rangeBox(selection, label) {
-    selection
-        .classed('form-row', true)
-        .classed('form-group', true)
-        .classed('align-items-center', true)
-      .append('div')
-        .classed('col-form-label', true)
-        .classed('col-form-label-sm', true)
-        .text(label);
-
-    const minBox = selection.append('div');
-    minBox.append('label').text('min');
-    minBox.append('input').classed('min', true);
-
-    const maxBox = selection.append('div');
-    maxBox.append('label').text('max');
-    maxBox.append('input').classed('max', true);
-
-    selection.selectAll('div')
-        .classed('form-group', true)
-        .classed('col-4', true)
-        .classed('mb-0', true);
-
-    selection.selectAll('label')
-        .classed('col-form-label', true)
-        .classed('col-form-label-sm', true)
-        .classed('py-0', true);
-
-    selection.selectAll('input')
-        .classed('form-control', true)
-        .classed('form-control-sm', true)
-        .attr('type', 'number');
-
-    selection.append('div')
-        .classed('col-4', true);
-    selection.append('div')
-        .call(badge$1.invalidFeedback)
-        .classed('col-8', true);
-  }
-
-
-  function linearRange(selection, min, max, step) {
-    selection.selectAll('.min, .max')
-        .attr('min', min || null)
-        .attr('max', max || null)
-        .attr('step', step || null)
-        .attr('required', 'required')
-        .on('input', function () {
-          const valid = linearValid(this, step);
-          d3__default["default"].select(this)
-            .style('background-color', valid ? null : '#ffcccc');
-          selection.select('.invalid-feedback')
-            .style('display', linearRangeValid(selection) ? 'none': 'inherit');
-        })
-        .dispatch('input');
-  }
-
-
-  function logRange(selection) {
-    selection.selectAll('.min, .max')
-        .attr('required', 'required')
-        .on('input', function () {
-          const valid = logValid(this);
-          d3__default["default"].select(this)
-            .style('background-color', valid ? null : '#ffcccc');
-          selection.select('.invalid-feedback')
-            .style('display', logRangeValid(selection) ? 'none': 'inherit');
-        })
-        .dispatch('input');
-  }
-
-
-  function updateRangeValues(selection, range) {
-    selection.select('.min').property('value', range[0]);
-    selection.select('.max').property('value', range[1]);
-    selection.selectAll('.min,.max')
-        .dispatch('input', {bubbles: true});
-  }
-
-
-  function linearValid(node, step) {
-    // If step is not specified, accept stepMismatch
-    const stepm = step ? false : node.validity.stepMismatch;
-    return  node.checkValidity() || stepm;
-  }
-
-
-  function linearRangeValid(selection) {
-    const step = selection.select('.min').attr('step');
-    const minValid = linearValid(selection.select('.min').node(), step);
-    const maxValid = linearValid(selection.select('.max').node(), step);
-    return minValid && maxValid;
-  }
-
-
-  function logValid(node) {
-    // Accept stepMismatch
-    const stepm = node.validity.stepMismatch;
-    return (node.checkValidity() || stepm) && node.value > 0;
-  }
-
-
-  function logRangeValid(selection) {
-    const minPos = logValid(selection.select('.min').node());
-    const maxPos = logValid(selection.select('.max').node());
-    return linearRangeValid(selection) && minPos && maxPos;
-  }
-
-
-  function rangeValues(selection) {
-    return [
-      selection.select('.min').property('value'),
-      selection.select('.max').property('value')
-    ];
-  }
-
-
-  /**
-   * Render color scale box components
-   * @param {d3.selection} selection - selection of box container (div element)
-   */
-  function colorRangeBox(selection, label) {
-    selection
-        .classed('form-row', true)
-        .classed('form-group', true)
-        .classed('align-items-center', true);
-    selection.append('div')
-        .classed('col-form-label', true)
-        .classed('col-form-label-sm', true)
-        .text(label);
-
-    const minBox = selection.append('div');
-    minBox.append('label').text('min');
-    minBox.append('input').classed('min', true);
-
-    const midBox = selection.append('div');
-    midBox.append('label').text('mid');
-    midBox.append('input').classed('mid', true);
-
-    const maxBox = selection.append('div');
-    maxBox.append('label').text('max');
-    maxBox.append('input').classed('max', true);
-
-    selection.on('change', () => {
-      // avoid update by mousemove on the colorpicker
-      d3__default["default"].event.stopPropagation();
-    });
-
-    selection.selectAll('div')
-        .classed('form-group', true)
-        .classed('col-3', true)
-        .classed('mb-0', true);
-
-    selection.selectAll('label')
-        .classed('col-form-label', true)
-        .classed('col-form-label-sm', true)
-        .classed('py-0', true);
-
-    selection.selectAll('input')
-        .classed('form-control', true)
-        .classed('form-control-sm', true)
-        .attr('type', 'color');
-  }
-
-
-  function updateColorRangeValues(selection, range) {
-    selection.select('.min').property('value', range[0]);
-    selection.select('.mid').property('value', range[1]);
-    selection.select('.max').property('value', range[2]);
-  }
-
-
-  function colorRangeValues(selection) {
-    return [
-      selection.select('.min').property('value'),
-      selection.select('.mid').property('value'),
-      selection.select('.max').property('value')
-    ];
-  }
-
-
-  var rbox = {
-    rangeBox, linearRange, logRange, updateRangeValues,
-    rangeValues, linearRangeValid, logRangeValid,
-    colorRangeBox, updateColorRangeValues, colorRangeValues
-  };
-
-  function dropdownFormGroup(selection, label) {
-    const id = misc.uuidv4().slice(0, 8);
-    selection.classed('mb-3', true)
-      .append('div')
-        .classed('form-group', true)
-        .classed('form-row', true)
-        .classed('justify-content-end', true)
-      .append('button')
-        .classed('btn', true)
-        .classed('btn-sm', true)
-        .classed('btn-outline-primary', true)
-        .classed('dropdown-toggle', true)
-        .attr('data-toggle', 'collapse')
-        .attr('data-target', `#${id}-collapse`)
-        .attr('aria-expanded', 'false')
-        .attr('aria-controls', `${id}-collapse`)
-        .text(label);
-    selection.append('div')
-        .classed('collapse', true)
-        .attr('id', `${id}-collapse`)
-      .append('div')
-        .classed('card', true)
-        .classed('card-body', true);
-  }
-
-
-  var dropdown = {
-    dropdownFormGroup
-  };
-
-  /**
-   * Render color range control box group
-   * @param {d3.selection} selection - selection of box container (div element)
-   */
-  function colorRangeGroup(selection, colorScales) {
-    selection
-        .classed('mb-3', true);
-    selection.append('div')
-        .classed('colorscale', true)
-        .classed('mb-2', true)
-        .call(lbox.colorScaleBox, 'Colorscale')
-        .call(lbox.colorScaleBoxItems, colorScales);
-
-    // Custom colorscale
-    const collapse = selection.append('div')
-        .call(dropdown.dropdownFormGroup, 'Custom color')
-      .select('.card-body')
-        .classed('p-2', true);
-
-    const customColorRanges = [
-      {key: 'continuous', name: 'Continuous'},
-      {key: 'two-piece', name: 'Two-piece'}
-    ];
-    collapse.append('div')
-        .classed('rangetype', true)
-        .classed('mb-1', true)
-        .call(lbox.selectBox, 'Range type')
-        .call(lbox.updateSelectBoxOptions, customColorRanges);
-    collapse.append('div')
-        .classed('range', true)
-        .classed('mb-1', true)
-        .call(rbox.colorRangeBox, 'Range');
-    collapse.append('div')
-        .classed('unknown', true)
-        .classed('mb-1', true)
-        .call(box.colorBox, 'Unknown');
-  }
-
-
-  function updateColorRangeGroup(selection, cscale, range, unknown) {
-    const customRange = () => {
-      const cs = lbox.colorScaleBoxValue(selection.select('.colorscale'));
-      const rg = box.formValue(selection.select('.rangetype'));
-      const customScale = cs === 'custom';
-      selection.selectAll('.rangetype, .range, .unknown')
-          .selectAll('select, input')
-          .property('disabled', !customScale);
-      selection.select('.range').select('.mid')
-          .property('disabled', !customScale || rg === 'continuous');
-    };
-    selection.select('.colorscale')
-        .call(lbox.updateColorScaleBox, cscale)
-        .on('change', function () {
-          customRange();
-        });
-    const rtype = range.length === 2 ? 'continuous' : 'two-piece';
-    selection.select('.rangetype')
-        .call(box.updateFormValue, rtype)
-        .on('change', function () {
-          customRange();
-        })
-        .dispatch('change');
-    const rboxValues = range.length === 2  ? [range[0], null, range[1]] : range;
-    selection.select('.range')
-        .call(rbox.updateColorRangeValues, rboxValues)
-        .on('focusin', () => {
-          selection.dispatch('change', {bubbles: true});
-        });
-    selection.select('.unknown')
-        .call(box.updateFormValue, unknown)
-        .on('focusin', () => {
-          selection.dispatch('change', {bubbles: true});
-        });
-  }
-
-
-  function colorGroupValues(selection) {
-    const colorScale = lbox.colorScaleBoxItem(selection.select('.colorscale'));
-    const rtype = box.formValue(selection.select('.rangetype'));
-    const range = rbox.colorRangeValues(selection.select('.range'));
-    const unknown = box.formValue(selection.select('.unknown'));
-    return {
-      color: colorScale.key,
-      colorScaleType: colorScale.type,
-      range: rtype === 'continuous' ? [range[0], range[2]] : range,
-      unknown: unknown
-    };
-  }
-
-
-  /**
-   * Render scale and domain control box group
-   * @param {d3.selection} selection - selection of box container (div element)
-   */
-  function scaleBoxGroup(selection) {
-    selection.classed('mb-3', true);
-
-    // Scale type
-    const scaleOptions = [
-      {key: 'linear', name: 'Linear'},
-      {key: 'log', name: 'Log'}
-    ];
-    selection.append('div')
-        .classed('scale', true)
-        .classed('mb-1', true)
-        .call(lbox.selectBox, 'Scale')
-        .call(lbox.updateSelectBoxOptions, scaleOptions)
-        .on('change', function () {
-          const isLog = box.formValue(d3__default["default"].select(this)) === 'log';
-          selection.select('.domain')
-            .call(isLog ? rbox.logRange : rbox.linearRange)
-            .call(badge$1.updateInvalidMessage,
-                  isLog ? 'Please provide a valid range (larger than 0)'
-                  : 'Please provide a valid number');
-        });
-    selection.append('div')
-        .classed('domain', true)
-        .classed('mb-1', true)
-        .call(rbox.rangeBox, 'Domain');
-  }
-
-
-  function updateScaleBoxGroup(selection, scale, domain) {
-    selection.select('.scale')
-        .call(box.updateFormValue, scale)
-        .dispatch('change');
-    selection.select('.domain')
-        .call(rbox.updateRangeValues, domain);
-  }
-
-
-  function scaleBoxGroupValid(selection) {
-    const isLog = box.formValue(selection.select('.scale')) === 'log';
-    const dm = selection.select('.domain');
-    return isLog ? rbox.logRangeValid(dm) : rbox.linearRangeValid(dm);
-  }
-
-
-  function scaleGroupValues(selection) {
-    const scale = box.formValue(selection.select('.scale'));
-    const domain = rbox.rangeValues(selection.select('.domain'));
-    return {
-      scale: scale || 'linear',
-      domain: domain
-    };
-  }
-
-
-  var group = {
-    colorRangeGroup, updateColorRangeGroup, colorGroupValues,
-    scaleBoxGroup, updateScaleBoxGroup, scaleGroupValues, scaleBoxGroupValid
-  };
-
-  function colorControlBox(selection, colorScales, fieldName) {
-    // Color field
-    selection.append('div')
-        .classed('field', true)
-        .call(lbox.selectBox, fieldName || 'Field');
-
-    // Colorscale and custom range
-    selection.append('div')
-        .classed('range', true)
-        .call(group.colorRangeGroup, colorScales)
-        .on('change', function () {
-          const values = group.colorGroupValues(d3__default["default"].select(this));
-          const noScale = ['categorical', 'monocolor']
-            .includes(values.colorScaleType);
-          selection.select('.scale').selectAll('select,input')
-              .property('disabled', noScale);
-        });
-
-    // Scale
-    selection.append('div')
-        .classed('scale', true)
-        .call(group.scaleBoxGroup);
-
-    // Legend
-    selection.append('div')
-        .classed('legend', true)
-        .call(box.checkBox, 'Show legend');
-  }
-
-
-  function updateColorControl(selection, fieldOptions, colorState) {
-    selection.select('.field')
-        .call(lbox.updateSelectBoxOptions, fieldOptions)
-        .call(box.updateFormValue, colorState.field);
-    selection.select('.range')
-        .call(group.updateColorRangeGroup, colorState.color,
-              colorState.range, colorState.unknown);
-    selection.select('.scale')
-        .call(group.updateScaleBoxGroup, colorState.scale, colorState.domain)
-        .dispatch('change');
-    selection.select('.legend')
-        .call(box.updateCheckBox, colorState.legend);
-  }
-
-
-  function colorControlValid(selection) {
-    return group.scaleBoxGroupValid(selection.select('.scale'));
-  }
-
-
-  function colorControlState(selection) {
-    const range = group.colorGroupValues(selection.select('.range'));
-    const scale = group.scaleGroupValues(selection.select('.scale'));
-    return {
-      field: box.formValue(selection.select('.field')),
-      color: range.color,
-      range: range.range,
-      unknown: range.unknown,
-      scale: range.colorScaleType === 'categorical' ? 'ordinal': scale.scale,
-      domain: scale.domain,
-      legend: box.checkBoxValue(selection.select('.legend'))
-    };
-  }
-
-
-  function sizeControlBox(selection, fieldName) {
-    // Size field
-    selection.append('div')
-        .classed('field', true)
-        .call(lbox.selectBox, fieldName || 'Field');
-
-    // Size range
-    selection.append('div')
-        .classed('range', true)
-        .classed('mb-2', true)
-        .call(rbox.rangeBox, 'Range')
-        .call(rbox.linearRange, 0.1, 999, 0.1)
-        .call(badge$1.updateInvalidMessage,
-              'Please provide a valid range (0.1-999)');
-
-    // Size unknown
-    selection.append('div')
-        .classed('unknown', true)
-        .call(box.numberBox, 'Unknown')
-        .call(box.updateNumberRange, 0.1, 999, 0.1)
-        .call(badge$1.updateInvalidMessage,
-              'Please provide a valid number (0.1-999)')
-      .select('input')
-        .classed('col-8', false)
-        .classed('col-3', true);
-
-    // Size scale
-    selection.append('div')
-        .classed('scale', true)
-        .call(group.scaleBoxGroup);
-  }
-
-
-  function updateSizeControl(selection, fieldOptions, sizeState) {
-    selection.select('.field')
-        .call(lbox.updateSelectBoxOptions, fieldOptions)
-        .call(box.updateFormValue, sizeState.field);
-    selection.select('.range')
-        .call(rbox.updateRangeValues, sizeState.range);
-    selection.select('.unknown')
-        .call(box.updateFormValue, sizeState.unknown);
-    selection.select('.scale')
-        .call(group.updateScaleBoxGroup, sizeState.scale, sizeState.domain);
-  }
-
-
-  function sizeControlValid(selection) {
-    const rangeValid = rbox.linearRangeValid(selection.select('.range'));
-    const unkValid = box.formValid(selection.select('.unknown'));
-    const scaleValid = group.scaleBoxGroupValid(selection.select('.scale'));
-    return rangeValid && unkValid && scaleValid;
-  }
-
-
-  function sizeControlState(selection) {
-    const scale = group.scaleGroupValues(selection.select('.scale'));
-    return {
-      field: box.formValue(selection.select('.field')),
-      range: rbox.rangeValues(selection.select('.range')),
-      unknown: box.formValue(selection.select('.unknown')),
-      scale: scale.scale,
-      domain: scale.domain
-    };
-  }
-
-
-  function labelControlBox(selection, colorScales) {
-    // nodeLabel.visible
-    selection.append('div')
-      .append('div')
-        .classed('visible', true)
-        .call(box.checkBox, 'Show labels');
-
-    // nodeLabel
-    const labelGroup = selection.append('div')
-        .classed('mb-3', true);
-    labelGroup.append('div')
-        .classed('text', true)
-        .classed('mb-1', true)
-        .call(lbox.selectBox, 'Text field');
-    labelGroup.append('div')
-        .classed('size', true)
-        .classed('mb-1', true)
-        .call(box.numberBox, 'Font size')
-        .call(box.updateNumberRange, 0.1, 999, 0.1)
-        .call(badge$1.updateInvalidMessage,
-              'Please provide a valid number (0.1-999)')
-      .select('.form-control')
-        .attr('required', 'required');
-
-    // nodeLabelColor
-    selection.call(colorControlBox, colorScales, 'Color field');
-    // TODO: not implemented yet
-    selection.select('.legend input').property('disabled', true);
-  }
-
-
-  function updateLabelControl(selection, fieldOptions,
-                                 labelState, colorState) {
-    selection.select('.visible')
-        .call(box.updateCheckBox, labelState.visible);
-    selection.select('.text')
-        .call(lbox.updateSelectBoxOptions, fieldOptions)
-        .call(box.updateFormValue, labelState.field);
-    selection.select('.size')
-        .call(box.updateFormValue, labelState.size);
-    selection.call(updateColorControl, fieldOptions, colorState);
-  }
-
-
-  function labelControlValid(selection) {
-    const fontValid = box.formValid(selection.select('.size'));
-    return fontValid && colorControlValid(selection);
-  }
-
-
-  function labelControlState(selection) {
-    return {
-      label: {
-        field: box.formValue(selection.select('.text')),
-        size: box.formValue(selection.select('.size')),
-        visible: box.checkBoxValue(selection.select('.visible'))
-      },
-      labelColor: colorControlState(selection)
-    };
-  }
-
-
-  function controlBoxFrame(selection, navID, contentID) {
-    selection.append('nav')
-      .append('div')
-        .classed('nav', true)
-        .classed('nav-tabs', true)
-        .attr('id', navID)
-        .attr('role', 'tablist');
-    selection.append('div')
-        .classed('tab-content', true)
-        .classed('p-2', true)
-        .attr('id', contentID);
-  }
-
-
-  function controlBoxNav(selection, id, label, active) {
-    selection
-        .classed('nav-item', true)
-        .attr('role', 'presentation')
-      .append("button")
-        .classed('nav-link', true)
-        .classed('active', active)
-        .classed('py-1', true)
-        .attr('id', `${id}-tab`)
-        .attr('data-bs-toggle', 'tab')
-        .attr('data-bs-target', `#${id}`)
-        .attr('type', 'button')
-        .attr('role', 'tab')
-        .attr('aria-controls', id)
-        .attr('aria-selected', active ? "true" : "false")
-        .text(label);
-  }
-
-
-  function controlBoxItem(selection, id, active) {
-    selection
-        .classed('tab-pane', true)
-        .classed('fade', true)
-        .classed('px-0', true)
-        .classed('show', active)
-        .classed('active', active)
-        .attr('id', id)
-        .attr('role', 'tabpanel')
-        .attr('aria-labelledby', `${id}-tab`);
-  }
-
-
-  var cbox = {
-    colorControlBox, updateColorControl, colorControlValid, colorControlState,
-    sizeControlBox, updateSizeControl, sizeControlValid, sizeControlState,
-    labelControlBox, updateLabelControl, labelControlValid, labelControlState,
-    controlBoxFrame, controlBoxNav, controlBoxItem
-  };
 
   const svgWidth = 180;  //TODO
   const svgHeight = 180;  //TODO
@@ -2481,20 +2063,53 @@ var app = (function (d3, _) {
   }
 
 
-  function networkView(selection, state) {
-    selection.call(transform$1.view, state);
-    const field = selection.select('.field');
-    const edges = field.append('g').classed('edge-layer', true);
-    const nodes = field.append('g').classed('node-layer', true);
-    const legendGroup = selection.append('g')
-        .classed('legends', true);
-    legendGroup.append('g')
+  function viewComponent(selection) {
+    selection
+        .attr('preserveAspectRatio', 'xMinYMin meet')
+        .attr('pointer-events', 'all')
+        .attr('viewBox', "0 0 0 0");
+
+    // Boundary
+    selection.append('rect')
+        .classed('boundary', true)
+        .attr('x', 0)
+        .attr('y', 0)
+        .attr('width', 0)
+        .attr('height', 0)
+        .attr('fill', '#ffffff')
+        .attr('stroke-width', 1)
+        .attr('stroke', '#cccccc');
+
+    // Field
+    const field = selection.append('g')
+        .classed('field', true)
+        .style('opacity', 1e-6);
+    field.transition()
+        .duration(1000)
+        .style('opacity', 1);
+    field.append('g').classed('edge-layer', true);
+    field.append('g').classed('node-layer', true);
+
+    selection.append('g')
+        .classed('legends', true)
+      .append('g')
         .classed('nodecolor', true)
         .call(legend.colorBarLegend);
+  }
+
+
+  function updateView(selection, state) {
+    selection
+        .attr('viewBox', `0 0 ${state.viewBox.right} ${state.viewBox.bottom}`);
+    selection.select(".boundary")
+        .attr('width', state.viewBox.right)
+        .attr('height', state.viewBox.bottom);
+
     // Apply changes in datasets
     state.updateAllNotifier = () => {
       state.updateFilter();
       state.updateVisibility();
+      state.updateHeaderNotifier();
       state.updateControlBoxNotifier();  // Update selectBox options
       state.setForceNotifier();
       state.updateComponentNotifier();
@@ -2506,18 +2121,18 @@ var app = (function (d3, _) {
       state.updateInteractionNotifier();  // Apply drag events to each nodes
     };
     state.updateNodeNotifier = () => {
-      nodes.call(updateNodes, state.vnodes);
+      selection.select(".node-layer").call(updateNodes, state.vnodes);
       // state.updateLegendNotifier();
     };
     state.updateEdgeNotifier = () => {
-      edges.call(updateEdges, state.vedges);
+      selection.select(".edge-layer").call(updateEdges, state.vedges);
     };
     state.updateNodeAttrNotifier = () => {
-      nodes.call(updateNodeAttrs, state);
+      selection.select(".node-layer").call(updateNodeAttrs, state);
       // state.updateLegendNotifier();
     };
     state.updateEdgeAttrNotifier = () => {
-      edges.call(updateEdgeAttrs, state);
+      selection.select(".edge-layer").call(updateEdgeAttrs, state);
     };
     /*
     state.updateLegendNotifier = () => {
@@ -2535,7 +2150,7 @@ var app = (function (d3, _) {
     updateNodes, updateEdges, updateNodeCoords, updateEdgeCoords,
     updateNodeAttrs, updateEdgeAttrs, updateNodeSelection,
     updateAttrs, updateComponents,
-    move, moveEdge, networkView
+    move, moveEdge, viewComponent, updateView
   };
 
   function dragListener(selection, state) {
@@ -2699,7 +2314,7 @@ var app = (function (d3, _) {
   }
 
 
-  function setInteraction(selection, state) {
+  function interactionComponent(selection) {
     // Rectangle selection layer
     selection.append('g')
         .classed('interactions', true)
@@ -2710,7 +2325,10 @@ var app = (function (d3, _) {
         .attr('stroke-width', 1)
         .attr('stroke-dasharray', '5,5')
         .attr('visibility', 'hidden');
+  }
 
+
+  function setInteraction(selection, state) {
     // Background click to clear selection
     selection
         .on('touchstart', event => { event.preventDefault(); })
@@ -2764,7 +2382,7 @@ var app = (function (d3, _) {
 
 
   var interaction = {
-    dragListener, zoomListener, setInteraction
+    dragListener, zoomListener, interactionComponent, setInteraction
   };
 
   const forceParam = {
@@ -2848,7 +2466,7 @@ var app = (function (d3, _) {
   }
 
 
-  function activate(selection, state) {
+  function setForce(selection, state) {
     state.setForceNotifier = () => {
       const simulation = forceSimulation(
           state.config.forceParam, state.fieldWidth, state.fieldHeight);
@@ -2889,10 +2507,10 @@ var app = (function (d3, _) {
 
 
   var force = {
-    forceParam, forceSimulation, activate
+    forceParam, forceSimulation, setForce
   };
 
-  function LayoutControlBox(selection, state) {
+  function LayoutControlBox(selection) {
     // Fit
     selection.append('div')
         .classed('mb-0', true)
@@ -3004,7 +2622,7 @@ var app = (function (d3, _) {
       - select/deselect all
   */
 
-  function FilterControlBox(selection, state) {
+  function FilterControlBox(selection) {
     // New filter
     selection.append('div')
         .classed('mb-3', true)
@@ -3022,7 +2640,7 @@ var app = (function (d3, _) {
 
 
 
-  function NodeControlBox(selection, state) {
+  function NodeControlBox(selection) {
     // Node color
     selection.append('div')
       .classed('mb-1', true)
@@ -3034,8 +2652,7 @@ var app = (function (d3, _) {
         .classed('mb-1', true)
         .classed('ms-3', true)
         .classed('gx-0', true)
-        .call(lbox.selectBox, 'Field')
-        .call(lbox.updateSelectBoxOptions, state.nodeFields);
+        .call(lbox.selectBox, 'Field');
     // Color range preset
     selection.append('div')
         .classed('colorrange', true)
@@ -3064,8 +2681,7 @@ var app = (function (d3, _) {
         .classed('mb-1', true)
         .classed('ms-3', true)
         .classed('gx-0', true)
-        .call(lbox.selectBox, 'Field')
-        .call(lbox.updateSelectBoxOptions, state.nodeFields);
+        .call(lbox.selectBox, 'Field');
     // Size range preset
     selection.append('div')
         .classed('sizerange', true)
@@ -3101,8 +2717,7 @@ var app = (function (d3, _) {
         .classed('mb-1', true)
         .classed('ms-3', true)
         .classed('gx-0', true)
-        .call(lbox.selectBox, 'Field')
-        .call(lbox.updateSelectBoxOptions, state.nodeFields);
+        .call(lbox.selectBox, 'Field');
     // Label font size
     selection.append('div')
         .classed('labelsize', true)
@@ -3138,79 +2753,79 @@ var app = (function (d3, _) {
   }
 
   function updateNodeControl(selection, state) {
+    selection.on('change', () => {
+      state.updateNodeAttrNotifier();
+    });
+
     selection.select('.colorfield')
+        .call(lbox.updateSelectBoxOptions, state.nodeFields)
         .call(lbox.updateSelectBoxValue, state.appearance.nodeColor.field)
         .on('change', () => {
           state.appearance.nodeColor.field = lbox.selectBoxValue(selection);
-          state.updateNodeAttrNotifier();
         });
     selection.select('.colorrange')
         .call(lbox.updateColorScaleBox, state.appearance.nodeColor.rangePreset)
         .on('change', () => {
           state.appearance.nodeColor.rangePreset = lbox.colorScaleBoxValue(selection);
-          state.updateNodeAttrNotifier();
         });
     selection.select('.colorscale')
         .call(lbox.updateSelectBoxValue, state.appearance.nodeColor.scale)
         .on('change', () => {
           state.appearance.nodeColor.scale = lbox.selectBoxValue(selection);
-          state.updateNodeAttrNotifier();
         });
 
     selection.select('.sizefield')
+        .call(lbox.updateSelectBoxOptions, state.nodeFields)
         .call(lbox.updateSelectBoxValue, state.appearance.nodeSize.field)
         .on('change', () => {
           state.appearance.nodeSize.field = lbox.selectBoxValue(selection);
-          state.updateNodeAttrNotifier();
         });
     selection.select('.sizerange')
         .call(lbox.updateSelectBoxValue, state.appearance.nodeSize.rangePreset)
         .on('change', () => {
           state.appearance.nodeSize.rangePreset = lbox.selectBoxValue(selection);
-          state.updateNodeAttrNotifier();
         });
     selection.select('.sizescale')
         .call(lbox.updateSelectBoxValue, state.appearance.nodeSize.scale)
         .on('change', () => {
           state.appearance.nodeSize.scale = lbox.selectBoxValue(selection);
-          state.updateNodeAttrNotifier();
         });
 
     selection.select('.labelvisible')
         .call(box.updateCheckBox, state.appearance.nodeLabel.visible)
         .on('change', () => {
           state.appearance.nodeLabel.visible = box.checkBoxValue(selection);
-          state.updateNodeAttrNotifier();
         });
     selection.select('.labelfield')
+        .call(lbox.updateSelectBoxOptions, state.nodeFields)
         .call(lbox.updateSelectBoxValue, state.appearance.nodeLabel.field)
         .on('change', () => {
           state.appearance.nodeLabel.field = lbox.selectBoxValue(selection);
-          state.updateNodeAttrNotifier();
         });
     selection.select('.labelsize')
         .call(box.updateFormValue, state.appearance.nodeLabel.size)
         .on('change', () => {
           state.appearance.nodeLabel.size = box.formValue(selection);
-          state.updateNodeAttrNotifier();
         });
 
     selection.select('.shownodeimage')
         .call(box.updateCheckBox, state.config.alwaysShowNodeImage)
-        .on('change', () => {
+        .on('change', event => {
           state.config.alwaysShowNodeImage = box.checkBoxValue(selection);
           state.updateComponentNotifier();
+          event.stopPropagation();
         });
 
     selection.select('.legend')
         .call(lbox.updateSelectBoxValue, state.config.legendOrient)
-        .on('change', () => {
+        .on('change', event => {
           state.config.legendOrient = lbox.selectBoxValue(selection);
           //state.updateLegendNotifier();
+          event.stopPropagation();
         });
   }
 
-  function EdgeControlBox(selection, state) {
+  function EdgeControlBox(selection) {
     // Edge color
     selection.append('div')
       .classed('mb-1', true)
@@ -3222,8 +2837,7 @@ var app = (function (d3, _) {
         .classed('mb-1', true)
         .classed('ms-3', true)
         .classed('gx-0', true)
-        .call(lbox.selectBox, 'Field')
-        .call(lbox.updateSelectBoxOptions, state.edgeFields);
+        .call(lbox.selectBox, 'Field');
     // Color range preset
     selection.append('div')
         .classed('colorrange', true)
@@ -3252,8 +2866,7 @@ var app = (function (d3, _) {
         .classed('mb-1', true)
         .classed('ms-3', true)
         .classed('gx-0', true)
-        .call(lbox.selectBox, 'Field')
-        .call(lbox.updateSelectBoxOptions, state.edgeFields);
+        .call(lbox.selectBox, 'Field');
     // Width range preset
     selection.append('div')
         .classed('widthrange', true)
@@ -3289,8 +2902,7 @@ var app = (function (d3, _) {
         .classed('mb-1', true)
         .classed('ms-3', true)
         .classed('gx-0', true)
-        .call(lbox.selectBox, 'Field')
-        .call(lbox.updateSelectBoxOptions, state.edgeFields);
+        .call(lbox.selectBox, 'Field');
     // Label font size
     selection.append('div')
         .classed('labelsize', true)
@@ -3325,6 +2937,7 @@ var app = (function (d3, _) {
 
   function updateEdgeControl(selection, state) {
     selection.select('.colorfield')
+        .call(lbox.updateSelectBoxOptions, state.edgeFields)
         .call(lbox.updateSelectBoxValue, state.appearance.edgeColor.field)
         .on('change', () => {
           state.appearance.edgeColor.field = lbox.selectBoxValue(selection);
@@ -3344,6 +2957,7 @@ var app = (function (d3, _) {
         });
 
     selection.select('.widthfield')
+        .call(lbox.updateSelectBoxOptions, state.edgeFields)
         .call(lbox.updateSelectBoxValue, state.appearance.edgeWidth.field)
         .on('change', () => {
           state.appearance.edgeWidth.field = lbox.selectBoxValue(selection);
@@ -3369,6 +2983,7 @@ var app = (function (d3, _) {
           state.updateEdgeAttrNotifier();
         });
     selection.select('.labelfield')
+        .call(lbox.updateSelectBoxOptions, state.edgeFields)
         .call(lbox.updateSelectBoxValue, state.appearance.edgeLabel.field)
         .on('change', () => {
           state.appearance.edgeLabel.field = lbox.selectBoxValue(selection);
@@ -3411,7 +3026,7 @@ var app = (function (d3, _) {
   */
 
 
-  function StatisticsBox(selection, state) {
+  function StatisticsBox(selection) {
     selection
         .classed('small', true);
     // Components
@@ -3459,7 +3074,41 @@ var app = (function (d3, _) {
 
 
 
-  function controlBox(selection, state) {
+
+  function controlBoxNav(selection, id, label, active) {
+    selection
+        .classed('nav-item', true)
+        .attr('role', 'presentation')
+      .append("button")
+        .classed('nav-link', true)
+        .classed('active', active)
+        .classed('py-1', true)
+        .attr('id', `${id}-tab`)
+        .attr('data-bs-toggle', 'tab')
+        .attr('data-bs-target', `#${id}`)
+        .attr('type', 'button')
+        .attr('role', 'tab')
+        .attr('aria-controls', id)
+        .attr('aria-selected', active ? "true" : "false")
+        .text(label);
+  }
+
+
+  function controlBoxItem(selection, id, active) {
+    selection
+        .classed('tab-pane', true)
+        .classed('fade', true)
+        .classed('px-0', true)
+        .classed('show', active)
+        .classed('active', active)
+        .attr('id', id)
+        .attr('role', 'tabpanel')
+        .attr('aria-labelledby', `${id}-tab`);
+  }
+
+
+
+  function controlBox(selection) {
     // Clean up
     selection.select(".nav-tabs").remove();
     selection.select(".tab-content").remove();
@@ -3476,42 +3125,38 @@ var app = (function (d3, _) {
 
     // Layout
     tabs.append('li')
-        .call(cbox.controlBoxNav, 'control-layout', 'Layout', true);
+        .call(controlBoxNav, 'control-layout', 'Layout', true);
     content.append('div')
-        .call(cbox.controlBoxItem, 'control-layout', true)
-        .call(LayoutControlBox, state);
+        .call(controlBoxItem, 'control-layout', true)
+        .call(LayoutControlBox);
 
     // Filter
     tabs.append('li')
-        .call(cbox.controlBoxNav, 'control-filter', 'Filter', false);
+        .call(controlBoxNav, 'control-filter', 'Filter', false);
     content.append('div')
-        .call(cbox.controlBoxItem, 'control-filter', false)
-        .call(FilterControlBox, state);
+        .call(controlBoxItem, 'control-filter', false)
+        .call(FilterControlBox);
 
     // Node
     tabs.append('li')
-        .call(cbox.controlBoxNav, 'control-node', 'Node', false);
+        .call(controlBoxNav, 'control-node', 'Node', false);
     content.append('div')
-        .call(cbox.controlBoxItem, 'control-node', false)
-        .call(NodeControlBox, state);
+        .call(controlBoxItem, 'control-node', false)
+        .call(NodeControlBox);
 
     // Edge
     tabs.append('li')
-        .call(cbox.controlBoxNav, 'control-edge', 'Edge', false);
+        .call(controlBoxNav, 'control-edge', 'Edge', false);
     content.append('div')
-        .call(cbox.controlBoxItem, 'control-edge', false)
-        .call(EdgeControlBox, state);
+        .call(controlBoxItem, 'control-edge', false)
+        .call(EdgeControlBox);
 
     // Statistics
     tabs.append('li')
-        .call(cbox.controlBoxNav, 'control-stat', 'Statistics', false);
+        .call(controlBoxNav, 'control-stat', 'Statistics', false);
     content.append('div')
-        .call(cbox.controlBoxItem, 'control-stat', false)
-        .call(StatisticsBox, state);
-
-    state.updateControlBoxNotifier = () => {
-      selection.call(updateControlBox, state);
-    };
+        .call(controlBoxItem, 'control-stat', false)
+        .call(StatisticsBox);
   }
 
 
@@ -3526,37 +3171,16 @@ var app = (function (d3, _) {
         .call(updateEdgeControl, state);
     selection.select('#control-stat')
         .call(updateStatistics, state);
+
+    state.updateControlBoxNotifier = () => {
+      selection.call(updateControlBox, state);
+    };
   }
 
 
   var control = {
     controlBox, updateControlBox
   };
-
-  /*
-  header1
-  - switch session: dropdown -> dialog confirm (if unsaved snapshot)
-  - open new session: button-> open file(.json)
-  - rename session: button -> dialog rename
-  - export session: button -> download
-  - delete session: button -> dialog confirm
-  - reset workspace -> dialog confirm
-  header2
-  - switch snapshot: dropdown -> dialog confirm (if unsaved snapshot)
-  - save: button
-  - rename: button -> dialog rename
-  - resume: button -> dialog confirm
-  - delete: button -> dialog confirm
-
-  */
-
-  function actionIcon(selection, icon) {
-    selection.append('img')
-      .attr('src', `${button.iconBaseURL}${icon}.svg`)
-      .classed('mx-1', true)
-      .style('width', '1.25rem')
-      .style('height', '1.25rem');
-  }
 
   function sessionMenu(selection) {
     selection
@@ -3570,59 +3194,81 @@ var app = (function (d3, _) {
 
     const menu = selection.append('div')
         .classed('col-4', true);
-    // open
+    // open new file
     menu.append('span')
         .classed('open', true)
       .append('a')
-        .call(button.dropdownMenuFile, 'Open new session', '.json,.gz', 'menu-import');
-    
+        .call(button.fileButton, 'New', '.json,.gz', 'menu-import');
     // export
     menu.append('span')
         .classed('export', true)
-      .append('a')
-        .call(button.dropdownMenuItem, '', 'menu-export');
-    
-    // loading circle
+        .call(button.menuIcon, 'Export', 'menu-export');
+    // delete
     menu.append('span')
-        .classed('loading-circle', true)
-        .call(badge$1.loadingCircle);
+        .classed('delete', true)
+        .call(button.menuIcon, 'Delete', 'delete-gray');
+    // delete all
+    menu.append('span')
+        .classed('deleteall', true)
+        .call(button.menuIcon, 'Delete all', 'delete-gray');
   }
 
-  function updateSessionMenu(selection, state, sessions, sessionIDs) {
-    const currentSessionID = null;
+
+  async function updateSessionMenu(selection, state) {
+    const currentID = await idb.getConfig("currentSession");
+    const sessions = await idb.getSessionHeaders();
     // switch
     selection.select('.switch')
-        .call(lbox.updateSelectBoxOptions, sessions)
-        .call(lbox.updateSelectBoxValue, currentSessionID)
-        .on('change', event => {
-          d3__default["default"].select(event.currentTarget).select("input").property("selectedIndex");
-          // confirm save
-          // idb retreive
-          // new state
-          // update all
-        });
-    // open
+        .call(lbox.updateSelectBoxOptions, sessions, d => d.id, d => d.name)
+        .call(lbox.updateSelectBoxValue, currentID)
+        .on('change', async event => {
+          const newID = lbox.selectBoxValue(d3__namespace.select(event.currentTarget));
+          await idb.putConfig("currentSession", newID);
+          const session = await idb.getSession(newID);
+          const newState = new NetworkState(session);
+          setState(newState);
+        })
+        .select("select")
+          .attr('disabled', state.stateChanged ? true : null);
+    // import
     selection.select('.open')
+        .classed('d-none', state.stateChanged)
         .on('change', async () => {
-          d3__default["default"].select('.loading-circle').style('display', 'inline-block');
-          const file = button.dropdownMenuFileValue(menu);
+          const file = button.fileValue(menu);
           const json = await hfile.loadJSON(file);
-          await idb.importItem(json);
-          await updateApp();
+          json.name = file.name.split(".")[0]; // use file basename as the session name
+          const sessionID = await idb.putSession(json);
+          await idb.putConfig("currentSession", sessionID);
+          const session = await idb.getSession(sessionID);
+          const newState = new NetworkState(session);
+          setState(newState);
         });
     // export
     selection.select('.export')
+        .classed('d-none', state.stateChanged)
+        .on('click', async () => {
+          const session = await idb.getSession(currentID);
+          hfile.downloadJSON(session, session.name);
+        });
+    // delete session
+    selection.select('.delete')
+        .classed('d-none', state.stateChanged)
         .on('click', () => {
-          const data = JSON.parse(JSON.stringify(record));
-          delete data.instance;
-          delete data.sessionStarted;
-          hfile.downloadJSON(data, data.name);
+          const control = new bootstrap.Modal(document.getElementById("deleted"));
+          control.toggle();
+        });
+    // delete all
+    selection.select('.deleteall')
+        .classed('d-none', state.stateChanged)
+        .on('click', () => {
+          const control = new bootstrap.Modal(document.getElementById("deletealld"));
+          control.toggle();
         });
   }
 
 
 
-  function snapshotMenu(selection, state) {
+  function snapshotMenu(selection) {
     selection
         .classed('row', true)
         .classed('mb-1', true);
@@ -3634,38 +3280,95 @@ var app = (function (d3, _) {
 
     const menu = selection.append('div')
         .classed('col-4', true);
-    // open
+    // save
     menu.append('span')
-        .classed('export', true)
-      .append('a')
-        .call(actionIcon, 'menu-export')
-        .call(button.dropdownMenuFile, 'Open new session', '.json,.gz', 'menu-import');
-
-    // notify saved
+        .classed('save', true)
+        .call(button.menuIcon, 'Save', 'menu-save');
+    // discard
     menu.append('span')
-        .classed('notify-saved', true)
-        .call(badge$1.alert)
-        .call(badge$1.updateAlert, 'State saved', 'success', 'check-green')
-        .style('display', 'none');
+        .classed('discard', true)
+        .call(button.menuIcon, 'Discard', 'delete-gray');
+    // rename
+    menu.append('span')
+        .classed('rename', true)
+        .call(button.menuIcon, 'Rename', 'menu-edittext');
+    // delete
+    menu.append('span')
+        .classed('delete', true)
+        .call(button.menuIcon, 'Delete', 'delete-gray');
+    
   }
 
 
   function updateSnapshotMenu(selection, state) {
-    // export
-    selection.select('.export')
-        .call(actionIcon, 'menu-export')
+    // switch
+    selection.select('.switch')
+        .call(lbox.updateSelectBoxOptions, state.snapshots, d => d.name, d => d.name)
+        .call(lbox.updateSelectBoxValue, state.name)
+        .on('change', event => {
+          const i = lbox.selectBoxValueIndex(d3__namespace.select(event.currentTarget));
+          state.applySnapshot(state.snapshots[i]);
+        })
+        .select("select")
+          .attr('disabled', state.stateChanged ? true : null);
+    // Save snapshot
+    selection.select('.save')
+        .classed('d-none', !state.stateChanged)
+        .on('click', async () => {
+          const snapshot = state.saveSnapshot();
+          await idb.appendSnapshot(state.sessionID, snapshot);
+          state.stateChanged = false;
+          state.updateHeaderNotifier();
+        });
+    // discard change
+    selection.select('.discard')
+        .classed('d-none', !state.stateChanged)
         .on('click', function () {
-          return state.saveSnapshot(idb)
-            .then(menubar.select('.notify-saved').call(badge$1.notify));
+          const control = new bootstrap.Modal(document.getElementById("discardd"));
+          control.toggle();
+        });
+    // rename
+    selection.select('.rename')
+        .classed('d-none', state.stateChanged)
+        .on('click', function () {
+          const control = new bootstrap.Modal(document.getElementById("renamed"));
+          control.toggle();
+        });
+    // delete
+    selection.select('.delete')
+        .classed('d-none', state.stateChanged)
+        .on('click', function () {
+          const control = new bootstrap.Modal(document.getElementById("deletesessiond"));
+          control.toggle();
         });
   }
 
 
-  var header = {
-    sessionMenu, updateSessionMenu, snapshotMenu, updateSnapshotMenu
-  };
+  function headerMenu(selection) {
+    selection.append("div")
+        .attr("id", 'header-session')
+        .call(sessionMenu);
+    selection.append("div")
+        .attr("id", 'header-snapshot')
+        .call(snapshotMenu);
+  }
+
+
+  function updateHeaderMenu(selection, state) {
+    selection.select("#header-session")
+        .call(updateSessionMenu, state);
+    selection.select("#header-snapshot")
+        .call(updateSnapshotMenu, state);
+
+    state.updateHeaderNotifier = () => {
+      selection.call(updateHeaderMenu, state);
+    };
+  }
+
+
 
   async function run() {
+    // Check web browser compatibility
     const err = client.compatibility();
     if (err) {
       d3__namespace.select('body')
@@ -3674,39 +3377,135 @@ var app = (function (d3, _) {
       return;
     }
 
-    d3__namespace.select('#header-session')
-        .call(header.sessionMenu);
-    d3__namespace.select('#header-snapshot')
-        .call(header.snapshotMenu);
-    d3__namespace.select('#dialogs');
-    //const sid = await idb.putSession(stub);
-    //await idb.putConfig("currentSession", sid);
+    // Render contents
+    d3__namespace.select('#header').call(headerMenu);
+    d3__namespace.select('#frame')
+      .append('svg')
+        .attr("id", "view")
+        .call(component.viewComponent)
+        .call(interaction.interactionComponent);
+    d3__namespace.select('#control')
+        .call(control.controlBox);
 
-    const sessionid = await idb$1.getConfig("currentSession");
+    const dialogs = d3__namespace.select('#dialogs');
+    dialogs.append('div')
+        .attr("id", "renamed")
+        .call(modal.renameDialog);
+    dialogs.append('div')
+        .attr("id", "discardd")
+        .call(modal.confirmDialog);
+    dialogs.append('div')
+        .attr("id", "deletesessiond")
+        .call(modal.confirmDialog);
+    dialogs.append('div')
+        .attr("id", "deletesnapshotd")
+        .call(modal.confirmDialog);
+    dialogs.append('div')
+        .attr("id", "deletealld")
+        .call(modal.confirmDialog);
+
+
+    // stub
+    /*
+    const stub = {
+      name: "test",
+      nodes: [
+        {name: "hoge"}, {name: "fuga"}, {name: "piyo"},
+      ],
+      edges: [
+        {source: 0, target: 1}, {source: 1, target: 2}, {source: 2, target: 0}
+      ],
+      snapshots: []
+    };
+    const sid = await idb.putSession(stub);
+    await idb.putConfig("currentSession", sid);
+    */
+    
+
+    const sessionid = await idb.getConfig("currentSession");
     if (!sessionid) { return; }
-    const session = await idb$1.getSession(sessionid);
+    console.log(sessionid);
+    const session = await idb.getSession(sessionid);
     const state = new NetworkState(session);
     // TODO: define field size according to the data size
     state.fieldWidth = 1200;
     state.fieldHeight = 1200;
 
-    // Contents
-    const frame = d3__namespace.select('#frame')
-        .call(transform$1.viewFrame, state);
-    frame.select('.view')
-        .call(component.networkView, state)
-        .call(force.activate, state)
+    setState(state);
+  }
+
+
+  function setState(state) {
+    // Title
+    d3__namespace.select('title').text(state.sessionName);
+
+    // Update contents
+    d3__namespace.select('#header')
+        .call(updateHeaderMenu, state);
+    d3__namespace.select("#view")
+        .call(component.updateView, state)
+        .call(force.setForce, state)
         .call(interaction.setInteraction, state);
     d3__namespace.select('#control')
-        .call(control.controlBox, state);
+        .call(control.updateControlBox, state);
+
+    // Dialogs
+    d3__namespace.select('#renamed')
+        .call(modal.updateRenameDialog, state.name)
+      .select(".submit")
+        .on('click', async event => {
+          const newName = modal.renameDialogValue(event.currentTarget);
+          await idb.renameSnapshot(state.sessionID, state.snapshotIndex, newName);
+          state.snapshots[state.snapshotIndex].name = newName;
+          state.updateHeaderNotifier();
+        });
+    d3__namespace.select('#discardd')
+        .call(modal.updateConfirmDialog,
+              'Are you sure you want to discard changes?')
+      .select(".ok")
+        .on('click', event => {
+          state.stateChanged = false;
+          state.applySnapshot(state.snapshots[state.snapshotIndex]);
+        });
+    d3__namespace.select('#deletesessiond')
+        .call(modal.updateConfirmDialog,
+              'Are you sure you want to delete the session?')
+      .select(".ok")
+        .on('click', async () => {
+          const headers = await idb.getSessionHeaders();
+          if (headers.length == 1) {
+            await idb.clearAll();  // Clear all
+          } else {
+            await idb.deleteSession(state.sessionID);
+            const deleted = await idb.getSessionHeaders();
+            await idb.putConfig("currentSession", deleted.slice(-1)[0].id);
+          }
+          location.reload();
+        });
+    d3__namespace.select('#deletesnapshotd')
+        .call(modal.updateConfirmDialog,
+              'Are you sure you want to delete the snapshot?')
+      .select(".ok")
+        .on('click', async () => {
+          await idb.deleteSnapshot(state.sessionID, state.snapshotIndex);
+          location.reload();
+        });
+    d3__namespace.select('#deletealld')
+        .call(modal.updateConfirmDialog,
+              'Are you sure you want to delete all local tables and reset the datastore ?')
+      .select(".ok")
+        .on('click', async () => {
+          await idb.clearAll();
+          location.reload();
+        });
 
     // Resize window
     window.onresize = () =>
       d3__namespace.select('#frame').call(transform$1.resize, state);
 
-    // Update
-    //state.updateAllNotifier();
-    //updateApp(state);
+    d3__namespace.select('#frame').call(transform$1.resize, state);
+
+    state.updateAllNotifier();
   }
 
 
@@ -3716,4 +3515,4 @@ var app = (function (d3, _) {
 
   return app;
 
-})(d3, _);
+})(d3, pako, _);

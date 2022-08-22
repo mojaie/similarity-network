@@ -136,14 +136,42 @@ function dropdownMenuFile(selection, label, accept, icon) {
       .text(label);
 }
 
+function fileButton(selection, label, accept, icon) {
+    selection
+        .on('click', event => {
+          d3.select(event.currentTarget).select('input').node().click();
+        });
+    selection.append('form')
+        .style('display', 'none')
+      .append('input')
+        .attr('type', 'file')
+        .attr('accept', accept);
+    selection.append('img')
+        .attr('src', `${iconBaseURL}${icon}.svg`)
+        .attr('title', label)
+        .classed('mr-1', true)
+        .style('width', '2rem')
+        .style('height', '2rem')
+    selection.append("span")
+        .text(label);
+  }
 
-function dropdownMenuFileValue(selection) {
+function fileValue(selection) {
   return selection.select('input').node().files[0];
 }
 
+function menuIcon(selection, label, icon) {
+    selection.append('img')
+        .attr('src', icon ? `${iconBaseURL}${icon}.svg` : null)
+        .classed('mr-1', true)
+        .style('width', '2rem')
+        .style('height', '2rem');
+    selection.append('span')
+        .text(label);
+  }
 
 export default {
   iconBaseURL, buttonBox, menuButton, menuButtonLink, menuModalLink,
   dropdownMenuButton, dropdownMenuItem, dropdownMenuModal,
-  dropdownMenuFile, dropdownMenuFileValue
+  dropdownMenuFile, fileValue, fileButton, menuIcon
 };

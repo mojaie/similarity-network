@@ -5,7 +5,6 @@ import d3 from 'd3';
 
 import {default as cscale} from '../common/scale.js';
 import {default as badge} from './badge.js';
-import {default as box} from './formBox.js';
 import {default as shape} from './shape.js';
 
 
@@ -28,15 +27,15 @@ function selectBox(selection, label) {
       .classed('form-select-sm', true);
 }
 
-function updateSelectBoxOptions(selection, items) {
+function updateSelectBoxOptions(selection, items, keyfunc = d => d, namefunc = d => d) {
   const options = selection.select('select')
     .selectAll('option')
-      .data(items);
+      .data(items, keyfunc);
   options.exit().remove();
   options.enter()
     .append('option')
-      .attr('value', d => d)
-      .text(d => d);
+      .attr('value', keyfunc)
+      .text(namefunc);
 }
 
 function updateSelectBoxValue(selection, value) {
@@ -204,7 +203,7 @@ function colorScaleBoxItem(selection) {
 
 
 export default {
-  selectBox, updateSelectBoxOptions, updateSelectBoxValue, selectBoxValue,
+  selectBox, updateSelectBoxOptions, updateSelectBoxValue, selectBoxValue, selectBoxValueIndex,
   checklistBox, updateChecklistItems, checkRequired, updateChecklistValues,
   checklistValues, anyChecked, setChecklistValidity,
   colorScaleBox, updateColorScaleItems, updateColorScaleBox,

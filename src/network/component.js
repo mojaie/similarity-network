@@ -225,6 +225,7 @@ function updateView(selection, state) {
   state.updateAllNotifier = () => {
     state.updateFilter();
     state.updateVisibility();
+    state.updateHeaderNotifier();
     state.updateControlBoxNotifier();  // Update selectBox options
     state.setForceNotifier();
     state.updateComponentNotifier();

@@ -82,41 +82,6 @@ function readonlyValue(selection) {
 }
 
 
-function textareaBox(selection, label, rows, placeholder) {
-  selection
-      .classed('form-group', true)
-      .classed('form-row', true);
-  const formLabel = selection.append('label')
-      .classed('col-form-label', true)
-      .classed('col-form-label-sm', true)
-      .classed('col-4', true)
-      .text(label);
-  formLabel.append('div')
-      .call(badge.invalidFeedback);
-  selection.append('textarea')
-      .classed('form-control', true)
-      .classed('form-control-sm', true)
-      .classed('col-8', true)
-      .attr('rows', rows)
-      .attr('placeholder', placeholder)
-      .on('input', function () {
-        const valid = textareaValid(selection);
-        selection.call(setValidity, valid);
-      });
-}
-
-function textareaBoxLines(selection) {
-  const value = selection.select('textarea').property('value');
-  if (value) return value.split('\n')
-    .map(e => e.replace(/^\s+|\s+$/g, ''))  // strip spaces
-    .filter(e => e.length > 0);
-  return [];
-}
-
-function textareaValid(selection) {
-  return /\s*?\w\s*?/.test(formValue(selection));
-}
-
 
 function checkBox(selection, label) {
   const box = selection
@@ -253,7 +218,6 @@ function fileInputValid(selection) {
 export default {
   updateFormValue, formValue, formValid, setValidity,
   textBox, readonlyBox, updateReadonlyValue, readonlyValue,
-  textareaBox, textareaBoxLines, textareaValid,
   numberBox, updateNumberRange,
   checkBox, updateCheckBox, checkBoxValue,
   colorBox,

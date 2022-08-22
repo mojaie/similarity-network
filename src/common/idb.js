@@ -126,7 +126,7 @@ async function getSession(id) {
   const tr = db.transaction(db.name).objectStore(db.name);
   return new Promise((resolve, reject) => {
     const req = tr.get(id);
-    req.onsuccess = event => resolve(event.target.result);
+    req.onsuccess = event => {console.log(event);resolve(event.target.result);}
     req.onerror = event => reject(event);
   });
 }
@@ -175,13 +175,36 @@ async function deleteSession(id) {
  */
 async function appendSnapshot(sessionid, snapshot) {
   const db = await instance.session;
-  const tr = db.transaction(db.name).objectStore(db.name);
+  const tr = db.transaction(db.name, 'readwrite').objectStore(db.name);
   const data = await new Promise((resolve, reject) => {
     const req = tr.get(sessionid);
     req.onsuccess = event => resolve(event.target.result);
     req.onerror = event => reject(event);
   });
-  data.snapshot.push(snapshot);
+  data.snapshots.push(snapshot);
+  return new Promise((resolve, reject) => {
+    const req = tr.put(data);
+    req.onsuccess = () => resolve();
+    req.onerror = event => reject(event);
+  });
+}
+
+/**
+ * Rename snapshot
+ * @param {string} sessionid - session ID
+ * @param {Object} idx - snapshot index
+ * @param {string} name - new name
+ * @return {Promise} resolve with nothing
+ */
+ async function renameSnapshot(sessionid, idx, name) {
+  const db = await instance.session;
+  const tr = db.transaction(db.name, 'readwrite').objectStore(db.name);
+  const data = await new Promise((resolve, reject) => {
+    const req = tr.get(sessionid);
+    req.onsuccess = event => resolve(event.target.result);
+    req.onerror = event => reject(event);
+  });
+  data.snapshots[idx].name = name;
   return new Promise((resolve, reject) => {
     const req = tr.put(data);
     req.onsuccess = () => resolve();
@@ -191,19 +214,20 @@ async function appendSnapshot(sessionid, snapshot) {
 
 
 /**
- * Update package in the store
- * @param {string} id - Package instance ID
- * @param {function} updater - update function
+ * Delete snapshot
+ * @param {string} sessionid - session ID
+ * @param {Object} idx - snapshot index
+ * @return {Promise} resolve with nothing
  */
  async function deleteSnapshot(sessionid, idx) {
   const db = await instance.session;
-  const tr = db.transaction(db.name).objectStore(db.name);
+  const tr = db.transaction(db.name, 'readwrite').objectStore(db.name);
   const data = await new Promise((resolve, reject) => {
     const req = tr.get(sessionid);
     req.onsuccess = event => resolve(event.target.result);
     req.onerror = event => reject(event);
   });
-  data.snapshot.splice(idx, 1);
+  data.snapshots.splice(idx, 1);
   return new Promise((resolve, reject) => {
     const req = tr.put(data);
     req.onsuccess = () => resolve();
@@ -217,5 +241,5 @@ export default {
   getConfig, putConfig,
   getSessionHeaders,
   getSession, putSession, deleteSession,
-  appendSnapshot, deleteSnapshot
+  appendSnapshot, renameSnapshot, deleteSnapshot
 };
