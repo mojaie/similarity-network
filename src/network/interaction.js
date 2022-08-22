@@ -1,7 +1,6 @@
 
 /** @module network/interaction */
 
-import _ from 'lodash';
 import d3 from 'd3';
 
 import {default as transform} from '../component/transform.js';

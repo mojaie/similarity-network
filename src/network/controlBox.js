@@ -1,7 +1,6 @@
 
 /** @module network/controlBox */
 
-import _ from 'lodash';
 import d3 from 'd3';
 
 import {default as misc} from '../common/misc.js';

@@ -1,15 +1,6 @@
 
 /** @module common/client */
 
-import _ from 'lodash';
-
-
-function URLQuery() {
-  const pairs = window.location.search.substring(1).split("&")
-    .map(e => e.split('='));
-  return _.fromPairs(pairs);
-}
-
 
 function compatibility() {
   if (!window.indexedDB) {
@@ -59,5 +50,5 @@ function registerCtrlCommand(key, callback) {
 
 
 export default {
-  URLQuery, compatibility, registerCtrlCommand
+  compatibility, registerCtrlCommand
 };
