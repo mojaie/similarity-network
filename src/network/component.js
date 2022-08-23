@@ -183,19 +183,23 @@ function updateView(selection, state) {
   selection.select(".boundary")
       .attr('width', state.viewBox.right)
       .attr('height', state.viewBox.bottom)
+  const tf = state.transform;
+  selection.select('.field')
+      .attr('transform', `translate(${tf.x}, ${tf.y}) scale(${tf.k})`);
 
   // Apply changes in nodes and edges displayed
   state.updateComponentNotifier = () => {
     state.updateVisibility();
     selection.call(updateComponents, state);
     // state.updateLegendNotifier();
+    state.updateHeaderNotifier();
     state.updateInteractionNotifier();  // Apply drag events to each nodes
   };
 
   // for only browser resize event
   state.updateViewNotifier = () => {
-    selection.call(updateView, state);
     state.updateComponentNotifier();
+    selection.call(updateView, state);
   }
 
   state.updateNodeAttrNotifier = () => {

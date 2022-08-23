@@ -32,5 +32,5 @@ function uuidv4() {
 
 
 export default {
-  sortType, formatNum, partialMatch, uuidv4
+  formatNum, partialMatch, uuidv4
 };

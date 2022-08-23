@@ -28,7 +28,9 @@ function sessionMenu(selection) {
   selection.append('div')
       .classed('switch', true)
       .classed('col-8', true)
-      .call(lbox.selectBox, 'Session');
+      .call(lbox.selectBox, 'Session')
+    .select("select")
+      .attr('disabled', true);
 
   const menu = selection.append('div')
       .classed('col-4', true)
@@ -38,13 +40,17 @@ function sessionMenu(selection) {
     .append('a')
       .call(button.fileButton, 'New', '.json,.gz', 'menu-import')
       .on('change', async () => {
+        // store json data
         const file = button.fileValue(menu);
         const json = await hfile.loadJSON(file);
         json.name = file.name.split(".")[0]; // use file basename as the session name
-        const sessionID = await idb.putSession(json);
-        await idb.putConfig("currentSession", sessionID);
-        const session = await idb.getSession(sessionID)
-        const newState = new NetworkState(session);
+        json.id = await idb.putSession(json);  // issue session ID
+        await idb.putConfig("currentSession", json.id);
+        // set view frame size (depends on browser)
+        const width = d3.select("#frame").property("offsetWidth");
+        const height = d3.select("#frame").property("offsetHeight");
+        // establish state
+        const newState = new NetworkState(json, width, height);
         setState(newState);
       });
   // export
@@ -95,7 +101,7 @@ async function updateSessionMenu(selection, state) {
   selection.select('.delete')
       .classed('d-none', state.stateChanged)
       .on('click', () => {
-        const control = new bootstrap.Modal(document.getElementById("deleted"));
+        const control = new bootstrap.Modal(document.getElementById("deletesessiond"));
         control.toggle();
       });
   // delete all
@@ -117,25 +123,31 @@ function snapshotMenu(selection) {
   selection.append('div')
       .classed('switch', true)
       .classed('col-8', true)
-      .call(lbox.selectBox, 'Snapshot');
+      .call(lbox.selectBox, 'Snapshot')
+    .select("select")
+      .attr('disabled', true);;
 
   const menu = selection.append('div')
       .classed('col-4', true)
   // save
   menu.append('span')
       .classed('save', true)
+      .classed('d-none', true)
       .call(button.menuIcon, 'Save', 'menu-save');
   // discard
   menu.append('span')
       .classed('discard', true)
+      .classed('d-none', true)
       .call(button.menuIcon, 'Discard', 'delete-gray');
   // rename
   menu.append('span')
       .classed('rename', true)
+      .classed('d-none', true)
       .call(button.menuIcon, 'Rename', 'menu-edittext');
   // delete
   menu.append('span')
       .classed('delete', true)
+      .classed('d-none', true)
       .call(button.menuIcon, 'Delete', 'delete-gray');
   
 }
@@ -144,11 +156,14 @@ function snapshotMenu(selection) {
 function updateSnapshotMenu(selection, state) {
   // switch
   selection.select('.switch')
-      .call(lbox.updateSelectBoxOptions, state.snapshots, d => d.name, d => d.name)
-      .call(lbox.updateSelectBoxValue, state.name)
+      .call(lbox.updateSelectBoxOptions, state.snapshots, (d, i) => i, d => d.name)
+      .call(lbox.updateSelectBoxValue, state.snapshotIndex)
       .on('change', event => {
         const i = lbox.selectBoxValueIndex(d3.select(event.currentTarget));
-        state.applySnapshot(state.snapshots[i]);
+        state.snapshotIndex = i;
+        state.applySnapshot(i);
+        state.updateHeaderNotifier();
+        state.updateViewNotifier();
       })
       .select("select")
         .attr('disabled', state.stateChanged ? true : null);
@@ -156,9 +171,13 @@ function updateSnapshotMenu(selection, state) {
   selection.select('.save')
       .classed('d-none', !state.stateChanged)
       .on('click', async () => {
-        const snapshot = state.saveSnapshot();
+        state.stickNotifier();
+        const snapshot = state.getSnapshot();
         await idb.appendSnapshot(state.sessionID, snapshot);
         state.stateChanged = false;
+        state.snapshots.push(snapshot);
+        state.snapshotIndex = state.snapshots.length - 1;
+        state.applySnapshot(state.snapshotIndex);
         state.updateHeaderNotifier();
       });
   // discard change
@@ -179,7 +198,7 @@ function updateSnapshotMenu(selection, state) {
   selection.select('.delete')
       .classed('d-none', state.stateChanged)
       .on('click', function () {
-        const control = new bootstrap.Modal(document.getElementById("deletesessiond"));
+        const control = new bootstrap.Modal(document.getElementById("deletesnapshotd"));
         control.toggle();
       });
 }
@@ -287,8 +306,7 @@ function setState(state) {
             'Are you sure you want to discard changes?')
     .select(".ok")
       .on('click', event => {
-        state.stateChanged = false;
-        state.applySnapshot(state.snapshots[state.snapshotIndex]);
+        state.applySnapshot(state.snapshotIndex);
       });
   d3.select('#deletesessiond')
       .call(modal.updateConfirmDialog,

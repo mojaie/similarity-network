@@ -8,6 +8,9 @@ import {default as component} from './component.js';
 
 function dragListener(selection, state) {
   return d3.drag()
+    .on('start', () => {
+      state.stateChanged = true;
+    })
     .on('drag', event => {
       if (event.subject.__selected) {
         // multi selected node
@@ -45,6 +48,9 @@ function zoomListener(selection, state) {
     .on("dblclick.zoom", null)  // disable double-click zoom
     .on('.drag', null);  // disable rectSelect
   return d3.zoom()
+    .on('start', () => {
+      state.stateChanged = true;
+    })
     .on('zoom', event => {
       const t = event.transform;
       selection.select('.field')
@@ -86,6 +92,7 @@ function rectSelectListener(selection, state) {
     });
   return d3.drag()
     .on('start', event => {
+      state.stateChanged = true;
       origin.x = event.x;
       origin.y = event.y;
       rect.attr('visibility', 'visible')
@@ -131,6 +138,7 @@ function selectListener(selection, state) {
         .on('touchmove', event => { event.preventDefault(); })
         .on('click.select', event => {
           event.stopPropagation();
+          state.stateChanged = true;
           state.nodes.forEach((e, i) => {
             state.nodes[i].__selected = false;
           });
@@ -149,6 +157,7 @@ function multiSelectListener(selection, state) {
         .on('touchmove', event => { event.preventDefault(); })
         .on('click.select', event => {
           event.stopPropagation();
+          state.stateChanged = true;
           const n = d3.select(event.currentTarget).datum().__index;
           state.nodes[n].__selected = state.nodes[n].__selected ? false : true;
           selection.selectAll(".node")
@@ -189,6 +198,7 @@ function setInteraction(selection, state) {
       .on('touchstart', event => { event.preventDefault(); })
       .on('touchmove', event => { event.preventDefault(); })
       .on('click', event => {
+        state.stateChanged = true;
         state.nodes.forEach((e, i) => {
           state.nodes[i].__selected = false;
         });

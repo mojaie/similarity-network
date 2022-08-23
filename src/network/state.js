@@ -33,12 +33,6 @@ export default class NetworkState extends TransformState {
       e.__index = i;
     })
 
-    // Snapshot properties
-    this.name = null;
-    this.filters = null;
-    this.positions = null;
-    this.config = null;
-    this.appearance = null;
 
     // filtered elements
     this.fnodes = [];
@@ -49,9 +43,10 @@ export default class NetworkState extends TransformState {
     this.vnodes = [];
     this.vedges = [];
 
-    // Visibility
+    // States
     this.showNodeImage = false;
     this.showEdge = false;
+    this.forceActive = true;
 
     // Event listeners
     this.zoomListener = null;
@@ -59,12 +54,11 @@ export default class NetworkState extends TransformState {
 
     // Event notifiers
     this.updateHeaderNotifier = () => {};
-    this.updateComponentNotifier = () => {};
+    this.updateControlBoxNotifier = () => {};
     this.updateViewNotifier = () => {};
+    this.updateComponentNotifier = () => {};
     this.updateNodeAttrNotifier = () => {};
     this.updateEdgeAttrNotifier = () => {};
-    this.updateLegendNotifier = () => {};
-    this.updateControlBoxNotifier = () => {};
     this.updateInteractionNotifier = () => {};
     this.fitNotifier = () => {};
     this.setForceNotifier = () => {};
@@ -72,28 +66,19 @@ export default class NetworkState extends TransformState {
     this.relaxNotifier = () => {};
     this.restartNotifier = () => {};
     this.tickCallback = () => {};
-    this.updateAllNotifier = () => {
+    this.setSnapshotCallback = () => {
       this.updateHeaderNotifier();
       this.updateControlBoxNotifier();
       this.updateFilter();
       this.setForceNotifier();
-      this.updateComponentNotifier();
+      this.updateViewNotifier();
     };
 
-    // Initialize snapshot
-    this.stateChanged = true;  // if true, there are unsaved changes
-    this.snapshots = session.snapshots || [];
-    if (this.snapshots.length == 0) { this.snapshots.push({}); }
-    this.snapshotIndex = this.snapshots.length - 1;
-    this.applySnapshot(this.snapshots[this.snapshotIndex]);
-  }
 
-  applySnapshot(snapshot) {
-    this.name = snapshot.hasOwnProperty("name") ? snapshot.name : "default";
-    this.filters = snapshot.hasOwnProperty("filters") ? snapshot.filters : [];
-    this.positions = snapshot.hasOwnProperty("positions") ? snapshot.positions : [];
-    this.forceActive = !snapshot.hasOwnProperty("positions");
-    this.config = snapshot.hasOwnProperty("config") ? snapshot.config : {
+    // Initialize snapshot
+    this.name = "default";
+    this.filters = [];
+    this.config = {
       showNodeImageThreshold: 100,
       alwaysShowNodeImage: false,
       showEdgeThreshold: 500,
@@ -102,7 +87,7 @@ export default class NetworkState extends TransformState {
       showEdgeLegend: 'none',
       forceParam: 'dense'
     };
-    this.appearance = snapshot.hasOwnProperty("appearance") ? snapshot.appearance : {
+    this.appearance = {
       nodeColor: {
         field: null, rangePreset: 'default',
         scale: 'linear', domain: [0, 1]
@@ -126,27 +111,52 @@ export default class NetworkState extends TransformState {
         field: null, size: 12, visible: false
       }
     };
-    this.updateAllNotifier();
+    this.snapshots = session.snapshots || [];
+    this.snapshotIndex = this.snapshots.length - 1;
+    this.applySnapshot(this.snapshotIndex);
   }
 
-  saveSnapshot() {
+  setSnapshot(idx) {
+    if (idx >= 0) {  // idx = -1 -> no snapshots (default configuration)
+      // TODO transform
+      this.forceActive = false;
+      this.stateChanged = false;
+      const snapshot = this.snapshots[idx];
+      this.name = snapshot.name;
+      this.filters = snapshot.filters;
+      this.config = snapshot.config;
+      this.appearance = snapshot.appearance;
+      this.transform = snapshot.transform;
+      snapshot.positions.forEach((e, i) => {
+        this.nodes[i].x = e.x;
+        this.nodes[i].y = e.y;
+      });
+    }
+    this.setSnapshotCallback();
+  }
+
+  getSnapshot() {
     const today = new Date();
-    const positions = this.nodes.forEach(e => {
+    const positions = this.nodes.map(e => {
       return {x: e.x || 0.0, y: e.y || 0.0}
     });
     return {
       name: `snapshot - ${today.toLocaleString('jp')}`,
       filters: this.filters,
       positions: positions,
+      transform: this.transform,
       config: this.config,
       appearance: this.appearance
-    }
+    };
   }
 
   /**
    * update this.nodes and this.edges used by d3.force
    */
-  updateFilter() {
+  setFilter() {
+    // fnodes and fedges used for force layout
+    // called by filter
+
     // TODO: apply filters
     /*
     this.snapshot.filters.forEach(filter => {
@@ -172,10 +182,12 @@ export default class NetworkState extends TransformState {
       this.adjacency[e.__source].push([e.__target, e]);
       this.adjacency[e.__target].push([e.__source, e]);
     });
-    // this.setAllCoords(this.coords);
+    // this.setFilterCallback();
   }
 
   setBoundary() {
+    // TODO: only used for fit operation
+    // called by node coords operations (force, drug, ...)
     const xs = [];
     const ys = [];
     this.fnodes.forEach(e => {
@@ -189,15 +201,18 @@ export default class NetworkState extends TransformState {
     // this.showBoundary(); // debug
   }
 
-  updateVisibility() {
+  setVisibility() {
+    // vnodes and vedges used for component drawing
+    // called by zoom and pan
     this.vnodes = this.fnodes.filter(e => {
       return e.y > this.focusArea.top && e.x > this.focusArea.left
         && e.y < this.focusArea.bottom && e.x < this.focusArea.right;
     });
-    const vn = this.vnodes.map(e => e.__index);
+    const vn = new Set(this.vnodes.map(e => e.__index));
     this.vedges = this.fedges.filter(e => {
-      return vn.includes(e.__source) || vn.includes(e.__target);
+      return vn.has(e.__source) || vn.has(e.__target);
     });
+    // this.setVisibilityCallback();
   }
 
 }

@@ -35,7 +35,6 @@ export default class TransformState {
       bottom: this.fieldHeight,
       left: 0
     };
-
     this.transform = transform || {x: 0, y: 0, k: 1};
     this.prevTransform = {
       x: this.transform.x,
@@ -43,6 +42,7 @@ export default class TransformState {
       k: this.transform.k
     };
 
+    this.stateChanged = false;  // if true, there are unsaved changes
   }
 
   setFocusArea() {
@@ -58,6 +58,7 @@ export default class TransformState {
   }
 
   setViewBox(width, height) {
+    // called by browser resize
     this.viewBox.right = width;
     this.viewBox.bottom = height;
     // this.showViewBox();  // debug
@@ -65,6 +66,8 @@ export default class TransformState {
   }
 
   setTransform(tx, ty, tk) {
+    // called by transform operation
+    this.stateChanged = true;
     this.transform.x = tx;
     this.transform.y = ty;
     this.transform.k = tk;

@@ -247,18 +247,11 @@ function NodeControlBox(selection) {
       .classed('ms-3', true)
       .classed('gx-0', true)
       .call(box.checkBox, 'Always show node images');
-  selection.append('div')
-      .classed('legend', true)
-      .classed('mb-3', true)
-      .classed('ms-3', true)
-      .classed('gx-0', true)
-      .call(lbox.selectBox, 'Legend')
-      .call(lbox.updateSelectBoxOptions,
-        ["none", "top-left", "top-right", "bottom-left", "bottom-right"]);
 }
 
 function updateNodeControl(selection, state) {
   selection.on('change', () => {
+    state.stateChanged = true;
     state.updateNodeAttrNotifier();
   });
 
@@ -316,16 +309,9 @@ function updateNodeControl(selection, state) {
   selection.select('.shownodeimage')
       .call(box.updateCheckBox, state.config.alwaysShowNodeImage)
       .on('change', event => {
+        state.stateChanged = false;
         state.config.alwaysShowNodeImage = box.checkBoxValue(selection);
         state.updateComponentNotifier();
-        event.stopPropagation();
-      });
-
-  selection.select('.legend')
-      .call(lbox.updateSelectBoxValue, state.config.legendOrient)
-      .on('change', event => {
-        state.config.legendOrient = lbox.selectBoxValue(selection);
-        //state.updateLegendNotifier();
         event.stopPropagation();
       });
 }
@@ -432,12 +418,6 @@ function EdgeControlBox(selection) {
       .classed('ms-3', true)
       .classed('gx-0', true)
       .call(box.checkBox, 'Always show edges');
-  selection.append('div')
-      .classed('showlegend', true)
-      .classed('mb-1', true)
-      .classed('ms-3', true)
-      .classed('gx-0', true)
-      .call(box.checkBox, 'Show edge legends');
 }
 
 function updateEdgeControl(selection, state) {
@@ -445,6 +425,7 @@ function updateEdgeControl(selection, state) {
       .call(lbox.updateSelectBoxOptions, state.edgeFields)
       .call(lbox.updateSelectBoxValue, state.appearance.edgeColor.field)
       .on('change', () => {
+        state.stateChanged = true;
         state.appearance.edgeColor.field = lbox.selectBoxValue(selection);
         state.updateEdgeAttrNotifier();
       });
@@ -503,16 +484,11 @@ function updateEdgeControl(selection, state) {
 
   selection.select('.showedge')
       .call(box.updateCheckBox, state.config.alwaysShowEdge)
-      .on('change', () => {
+      .on('change', event => {
+        state.stateChanged = true;
         state.config.alwaysShowEdge = box.checkBoxValue(selection);
         state.updateComponentNotifier();
-      });
-
-  selection.select('.legend')
-      .call(lbox.updateSelectBoxValue, state.config.legendOrient)
-      .on('change', () => {
-        state.config.legendOrient = lbox.selectBoxValue(selection);
-        //state.updateLegendNotifier();
+        event.stopPropagation();
       });
 }
 

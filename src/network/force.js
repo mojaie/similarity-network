@@ -51,6 +51,7 @@ function forceSimulation(type, width, height) {
 function forceDragListener(selection, simulation, state) {
   return d3.drag()
     .on('start', event => {
+      state.stateChanged = true;
       if (!event.active) state.relaxNotifier();
     })
     .on('drag', event => {
@@ -110,10 +111,12 @@ function setForce(selection, state) {
       selection.call(stick, simulation, state);
     };
     state.relaxNotifier = () => {
+      state.stateChanged = true;
       selection.call(unstick, simulation, state);
       simulation.alpha(0.1).restart();
     };
     state.restartNotifier = () => {
+      state.stateChanged = true;
       selection.call(unstick, simulation, state);
       simulation.alpha(1).restart();
     };

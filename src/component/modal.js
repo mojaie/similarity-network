@@ -87,10 +87,10 @@ function submitDialog(selection, title) {
 
 
 function renameDialog(selection) {
-  const renameBox = selection.call(submitDialog, "Save snapshot")
+  const renameBox = selection.call(submitDialog, "New name")
     .select('.modal-body').append('div')
       .classed('name', true)
-      .call(box.textBox, 'Save snapshot');
+      .call(box.textBox, 'New name');
   renameBox.select('.form-control')
       .attr('required', 'required');
   renameBox.select('.invalid-feedback')

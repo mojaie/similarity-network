@@ -181,6 +181,7 @@ async function appendSnapshot(sessionid, snapshot) {
     req.onsuccess = event => resolve(event.target.result);
     req.onerror = event => reject(event);
   });
+  if (!data.hasOwnProperty("snapshots")) { data.snapshots = []; }
   data.snapshots.push(snapshot);
   return new Promise((resolve, reject) => {
     const req = tr.put(data);
