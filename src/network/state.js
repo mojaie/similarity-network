@@ -5,8 +5,8 @@ import TransformState from  '../common/transform.js';
 
 
 export default class NetworkState extends TransformState {
-  constructor(session) {
-    super(1200, 1200, null);
+  constructor(session, width, height) {
+    super(width, height, null);
     // Session properties
     this.sessionName = session.name;
     this.sessionID = session.id;
@@ -58,14 +58,12 @@ export default class NetworkState extends TransformState {
     this.dragListener = null;
 
     // Event notifiers
-    this.updateAllNotifier = () => {};
+    this.updateHeaderNotifier = () => {};
     this.updateComponentNotifier = () => {};
-    this.updateNodeNotifier = () => {};
-    this.updateEdgeNotifier = () => {};
+    this.updateViewNotifier = () => {};
     this.updateNodeAttrNotifier = () => {};
     this.updateEdgeAttrNotifier = () => {};
     this.updateLegendNotifier = () => {};
-    this.updateHeaderNotifier = () => {};
     this.updateControlBoxNotifier = () => {};
     this.updateInteractionNotifier = () => {};
     this.fitNotifier = () => {};
@@ -74,6 +72,13 @@ export default class NetworkState extends TransformState {
     this.relaxNotifier = () => {};
     this.restartNotifier = () => {};
     this.tickCallback = () => {};
+    this.updateAllNotifier = () => {
+      this.updateHeaderNotifier();
+      this.updateControlBoxNotifier();
+      this.updateFilter();
+      this.setForceNotifier();
+      this.updateComponentNotifier();
+    };
 
     // Initialize snapshot
     this.stateChanged = true;  // if true, there are unsaved changes
@@ -184,50 +189,14 @@ export default class NetworkState extends TransformState {
     // this.showBoundary(); // debug
   }
 
-  setAllCoords(coordsList) {
-    this.ns.forEach(n => {
-      n.x = coordsList[n.index].x;
-      n.y = coordsList[n.index].y;
-      // this.es can be changed by forceSimulation so use adjacency
-      n.adjacency.forEach(e => {
-        const nbr = e[0];
-        const edge = e[1];
-        if (n.index < nbr) {
-          this.es[edge].sx = coordsList[n.index].x;
-          this.es[edge].sy = coordsList[n.index].y;
-        } else {
-          this.es[edge].tx = coordsList[n.index].x;
-          this.es[edge].ty = coordsList[n.index].y;
-        }
-      });
-    });
-    this.setBoundary();
-  }
-
-  setCoords(n, x, y) {
-    this.nodes[n].x = x;
-    this.nodes[n].y = y;
-    this.nodes[n].adjacency.forEach(e => {
-      const nbr = e[0];
-      const edge = e[1];
-      if (n < nbr) {
-        this.edges[edge].sx = x;
-        this.edges[edge].sy = y;
-      } else {
-        this.edges[edge].tx = x;
-        this.edges[edge].ty = y;
-      }
-    });
-    this.setBoundary();
-  }
-
   updateVisibility() {
     this.vnodes = this.fnodes.filter(e => {
       return e.y > this.focusArea.top && e.x > this.focusArea.left
         && e.y < this.focusArea.bottom && e.x < this.focusArea.right;
     });
+    const vn = this.vnodes.map(e => e.__index);
     this.vedges = this.fedges.filter(e => {
-      return this.vnodes.includes(e.__source) || this.vnodes.includes(e.__target);
+      return vn.includes(e.__source) || vn.includes(e.__target);
     });
   }
 

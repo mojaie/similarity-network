@@ -3,7 +3,6 @@
 
 import d3 from 'd3';
 
-import {default as transform} from '../component/transform.js';
 import {default as component} from './component.js';
 
 
@@ -48,7 +47,8 @@ function zoomListener(selection, state) {
   return d3.zoom()
     .on('zoom', event => {
       const t = event.transform;
-      selection.call(transform.transform, t.x, t.y, t.k);
+      selection.select('.field')
+          .attr('transform', `translate(${t.x}, ${t.y}) scale(${t.k})`)
       // Smooth transition (continuously update components on zoom out)
       // only work for showNodeImage=false due to performance reason
       if (!state.showNodeImage) {
@@ -160,11 +160,12 @@ function multiSelectListener(selection, state) {
 
 function resume(selection, tf) {
   selection
-      .call(transform.transform, tf.x, tf.y, tf.k)
       .call(
         d3.zoom().transform,
         d3.zoomIdentity.translate(tf.x, tf.y).scale(tf.k)
-      );
+      )
+    .select('.field')
+      .attr('transform', `translate(${tf.x}, ${tf.y}) scale(${tf.k})`);
 }
 
 

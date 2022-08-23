@@ -10,7 +10,6 @@ import {default as idb} from './common/idb.js';
 import {default as badge} from './component/badge.js';
 import {default as lbox} from './component/formListBox.js';
 import {default as button} from './component/button.js';
-import {default as transform} from './component/transform.js';
 import {default as modal} from './component/modal.js';
 
 import NetworkState from './network/state.js';
@@ -37,18 +36,31 @@ function sessionMenu(selection) {
   menu.append('span')
       .classed('open', true)
     .append('a')
-      .call(button.fileButton, 'New', '.json,.gz', 'menu-import');
+      .call(button.fileButton, 'New', '.json,.gz', 'menu-import')
+      .on('change', async () => {
+        const file = button.fileValue(menu);
+        const json = await hfile.loadJSON(file);
+        json.name = file.name.split(".")[0]; // use file basename as the session name
+        const sessionID = await idb.putSession(json);
+        await idb.putConfig("currentSession", sessionID);
+        const session = await idb.getSession(sessionID)
+        const newState = new NetworkState(session);
+        setState(newState);
+      });
   // export
   menu.append('span')
       .classed('export', true)
+      .classed('d-none', true)
       .call(button.menuIcon, 'Export', 'menu-export');
   // delete
   menu.append('span')
       .classed('delete', true)
+      .classed('d-none', true)
       .call(button.menuIcon, 'Delete', 'delete-gray');
   // delete all
   menu.append('span')
       .classed('deleteall', true)
+      .classed('d-none', true)
       .call(button.menuIcon, 'Delete all', 'delete-gray');
 }
 
@@ -71,17 +83,7 @@ async function updateSessionMenu(selection, state) {
         .attr('disabled', state.stateChanged ? true : null);
   // import
   selection.select('.open')
-      .classed('d-none', state.stateChanged)
-      .on('change', async () => {
-        const file = button.fileValue(menu);
-        const json = await hfile.loadJSON(file);
-        json.name = file.name.split(".")[0]; // use file basename as the session name
-        const sessionID = await idb.putSession(json);
-        await idb.putConfig("currentSession", sessionID);
-        const session = await idb.getSession(sessionID)
-        const newState = new NetworkState(session);
-        setState(newState);
-      })
+      .classed('d-none', state.stateChanged);
   // export
   selection.select('.export')
       .classed('d-none', state.stateChanged)
@@ -243,33 +245,15 @@ async function run() {
       .attr("id", "deletealld")
       .call(modal.confirmDialog);
 
-
-  // stub
-  /*
-  const stub = {
-    name: "test",
-    nodes: [
-      {name: "hoge"}, {name: "fuga"}, {name: "piyo"},
-    ],
-    edges: [
-      {source: 0, target: 1}, {source: 1, target: 2}, {source: 2, target: 0}
-    ],
-    snapshots: []
-  };
-  const sid = await idb.putSession(stub);
-  await idb.putConfig("currentSession", sid);
-  */
-  
-
   const sessionid = await idb.getConfig("currentSession");
-  if (!sessionid) { return; }
-  console.log(sessionid)
-  const session = await idb.getSession(sessionid);
-  const state = new NetworkState(session);
-  // TODO: define field size according to the data size
-  state.fieldWidth = 1200;
-  state.fieldHeight = 1200;
+  if (!sessionid) { return; } // start from new session
 
+  // set view frame size (depends on browser)
+  const width = d3.select("#frame").property("offsetWidth");
+  const height = d3.select("#frame").property("offsetHeight");
+  // open session
+  const session = await idb.getSession(sessionid);
+  const state = new NetworkState(session, width, height);
   setState(state);
 }
 
@@ -339,11 +323,14 @@ function setState(state) {
       });
 
   // Resize window
-  window.onresize = () =>
-    d3.select('#frame').call(transform.resize, state);
+  window.onresize = () => {
+    const width = d3.select("#frame").property("offsetWidth");
+    const height = d3.select("#frame").property("offsetHeight");
+    state.setViewBox(width, height);
+    state.updateViewNotifier();
+  }
 
-  d3.select('#frame').call(transform.resize, state);
-
+  // Update all
   state.updateAllNotifier();
 }
 

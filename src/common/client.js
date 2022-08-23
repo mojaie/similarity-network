@@ -40,15 +40,7 @@ function registerServiceWorker() {
 */
 
 
-function registerCtrlCommand(key, callback) {
-  document.addEventListener('keydown', event => {
-    if (event.ctrlKey && event.key === key) {
-      callback();
-    }
-  });
-}
-
 
 export default {
-  compatibility, registerCtrlCommand
+  compatibility
 };

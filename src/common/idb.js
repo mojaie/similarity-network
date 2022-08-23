@@ -126,7 +126,7 @@ async function getSession(id) {
   const tr = db.transaction(db.name).objectStore(db.name);
   return new Promise((resolve, reject) => {
     const req = tr.get(id);
-    req.onsuccess = event => {console.log(event);resolve(event.target.result);}
+    req.onsuccess = event => resolve(event.target.result);
     req.onerror = event => reject(event);
   });
 }

@@ -7,7 +7,6 @@ import {default as scale} from '../common/scale.js';
 import {default as misc} from '../common/misc.js';
 
 import {default as legend} from '../component/legend.js';
-import {default as transform} from '../component/transform.js';
 
 
 const svgWidth = 180;  //TODO
@@ -25,16 +24,16 @@ function updateNodes(selection, records, showStruct) {
   entered.append('circle')
       .attr('class', 'node-symbol');
   entered.append('g')
-      .attr('class', 'node-content')
+      .attr('class', 'node-image')
       .attr('transform', `translate(${-svgWidth / 2},${-svgHeight / 2})`);
   entered.append('foreignObject')
       .attr('class', 'node-html')
     .append('xhtml:div');
   const merged = entered.merge(nodes);
   if (showStruct) {
-    merged.select('.node-content').html(d => d.structure);
+    merged.select('.node-image').html(d => d.structure);
   } else {
-    merged.select('.node-content').select('svg').remove();
+    merged.select('.node-image').select('svg').remove();
   }
 }
 
@@ -124,6 +123,7 @@ function updateEdgeCoords(selection) {
     .attr('y', d => (d.target.y - d.source.y) / 2);
 }
 
+
 function updateNodeSelection(selection) {
   selection.select('.node-symbol')
     .attr('stroke', d => d.__selected ? 'red' : null)
@@ -131,51 +131,14 @@ function updateNodeSelection(selection) {
     .attr('stroke-opacity', d => d.__selected ? 0.5 : 0);
 }
 
-function updateAttrs(selection, state) {
-  selection.call(updateNodeAttrs, state);
-  selection.call(updateEdgeAttrs, state);
-}
-
 
 function updateComponents(selection, state) {
   selection.select('.node-layer')
-    .call(updateNodes, state.vnodes, false);
+    .call(updateNodes, state.vnodes, false)
+    .call(updateNodeAttrs, state);
   selection.select('.edge-layer')
-    .call(updateEdges, state.vedges);
-  selection.call(updateAttrs, state);
-}
-
-
-function moveNode(selection, x, y) {
-  selection.attr('transform', `translate(${x}, ${y})`);
-}
-
-
-function moveEdge(selection, sx, sy, tx, ty) {
-  selection.attr('transform', `translate(${sx}, ${sy})`);
-  selection.select('.edge-line')
-    .attr('x1', 0)
-    .attr('y1', 0)
-    .attr('x2', tx - sx)
-    .attr('y2', ty - sy);
-  selection.select('.edge-label')
-    .attr('x', (tx - sx) / 2)
-    .attr('y', (ty - sy) / 2);
-}
-
-
-function move(selection, node, state, x, y) {
-  const n = d3.select(node).call(moveNode, x, y).datum();
-  selection.select('.edge-layer')
-    .selectAll(".link")
-    .filter(d => state.adjacency.map(e => e[1].__index).includes(d.__index))
-    .each(function (d) {
-      if (n.__index === d.source.index) {
-        d3.select(this).call(moveEdge, x, y, d.target.x, d.target.y);
-      } else if (n.__index === d.target.index) {
-        d3.select(this).call(moveEdge, d.source.x, d.source.y, x, y);
-      }
-    });
+    .call(updateEdges, state.vedges)
+    .call(updateEdgeAttrs, state);
 }
 
 
@@ -221,28 +184,20 @@ function updateView(selection, state) {
       .attr('width', state.viewBox.right)
       .attr('height', state.viewBox.bottom)
 
-  // Apply changes in datasets
-  state.updateAllNotifier = () => {
-    state.updateFilter();
-    state.updateVisibility();
-    state.updateHeaderNotifier();
-    state.updateControlBoxNotifier();  // Update selectBox options
-    state.setForceNotifier();
-    state.updateComponentNotifier();
-  };
   // Apply changes in nodes and edges displayed
   state.updateComponentNotifier = () => {
-    // state.updateLegendNotifier();
+    state.updateVisibility();
     selection.call(updateComponents, state);
+    // state.updateLegendNotifier();
     state.updateInteractionNotifier();  // Apply drag events to each nodes
   };
-  state.updateNodeNotifier = () => {
-    selection.select(".node-layer").call(updateNodes, state.vnodes);
-    // state.updateLegendNotifier();
-  };
-  state.updateEdgeNotifier = () => {
-    selection.select(".edge-layer").call(updateEdges, state.vedges);
-  };
+
+  // for only browser resize event
+  state.updateViewNotifier = () => {
+    selection.call(updateView, state);
+    state.updateComponentNotifier();
+  }
+
   state.updateNodeAttrNotifier = () => {
     selection.select(".node-layer").call(updateNodeAttrs, state);
     // state.updateLegendNotifier();
@@ -265,6 +220,5 @@ function updateView(selection, state) {
 export default {
   updateNodes, updateEdges, updateNodeCoords, updateEdgeCoords,
   updateNodeAttrs, updateEdgeAttrs, updateNodeSelection,
-  updateAttrs, updateComponents,
-  move, moveEdge, viewComponent, updateView
+  updateComponents, viewComponent, updateView
 };

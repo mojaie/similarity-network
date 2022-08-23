@@ -9,6 +9,16 @@ export default class TransformState {
     this.fieldWidth = width;
     this.fieldHeight = height;
 
+    /*
+    transform: zoom and pan parameters
+    viewBox: SVG canvas area, depends on browser size, can be changed by event.resize.
+    focusArea: display area obtained by applying transform to viewbox
+    -> focusArea = transform(viewBox)
+
+    boundary: components area, depends on max/min coords of components.
+    fit: operation to find transform where focusArea = boundary
+    */
+
     this.viewBox = {
       top: 0,
       right: this.fieldWidth,
@@ -33,7 +43,6 @@ export default class TransformState {
       k: this.transform.k
     };
 
-    this.resizeNotifier = () => {};
   }
 
   setFocusArea() {
