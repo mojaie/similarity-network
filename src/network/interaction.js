@@ -56,7 +56,8 @@ function zoomListener(selection, state) {
       selection.select('.field')
           .attr('transform', `translate(${t.x}, ${t.y}) scale(${t.k})`)
       // Smooth transition (continuously update components on zoom out)
-      // only work for showNodeImage=false due to performance reason
+      // temporary disabled due to performance reason
+      /*
       if (!state.showNodeImage) {
         const xMoved = t.x > p.x + 20 || t.x < p.x - 20;
         const yMoved = t.y > p.y + 20 || t.y < p.y - 20;
@@ -68,6 +69,7 @@ function zoomListener(selection, state) {
           p.k = t.k;
         }
       }
+      */
     })
     .on('end', event => {
       const t = event.transform;

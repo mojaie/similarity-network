@@ -41,17 +41,14 @@ function sessionMenu(selection) {
       .call(button.fileButton, 'New', '.json,.gz', 'menu-import')
       .on('change', async () => {
         // store json data
+        // TODO: allow duplicate ID?
         const file = button.fileValue(menu);
         const json = await hfile.loadJSON(file);
         json.name = file.name.split(".")[0]; // use file basename as the session name
         json.id = await idb.putSession(json);  // issue session ID
         await idb.putConfig("currentSession", json.id);
-        // set view frame size (depends on browser)
-        const width = d3.select("#frame").property("offsetWidth");
-        const height = d3.select("#frame").property("offsetHeight");
         // establish state
-        const newState = new NetworkState(json, width, height);
-        setState(newState);
+        setState(json);
       });
   // export
   menu.append('span')
@@ -82,8 +79,8 @@ async function updateSessionMenu(selection, state) {
         const newID = lbox.selectBoxValue(d3.select(event.currentTarget));
         await idb.putConfig("currentSession", newID);
         const session = await idb.getSession(newID);
-        const newState = new NetworkState(session);
-        setState(newState);
+        // establish state
+        setState(session);
       })
       .select("select")
         .attr('disabled', state.stateChanged ? true : null);
@@ -215,6 +212,9 @@ function updateHeaderMenu(selection, state) {
       .call(updateSessionMenu, state);
   selection.select("#header-snapshot")
       .call(updateSnapshotMenu, state);
+  // dialog
+  d3.select('#renamed')
+      .call(modal.updateRenameDialog, state.name)
 
   state.updateHeaderCallback = () => {
     selection.call(updateHeaderMenu, state);
@@ -225,9 +225,13 @@ function updateHeaderMenu(selection, state) {
 }
 
 
-function setState(state) {
-  console.log(state.snapshotIndex)
-  console.log(state.snapshots.length)
+function setState(data) {
+  // set view frame size (depends on browser)
+  const width = d3.select("#frame").property("offsetWidth");
+  const height = d3.select("#frame").property("offsetHeight");
+
+  const state = new NetworkState(data, width, height);
+
   // Title
   d3.select('title').text(state.sessionName);
 
@@ -243,12 +247,11 @@ function setState(state) {
 
   // Dialogs
   d3.select('#renamed')
-      .call(modal.updateRenameDialog, state.name)
-    .select(".submit")
-      .on('click', async event => {
-        const newName = modal.renameDialogValue(event.currentTarget);
+      .on('submit', async event => {
+        const newName = modal.renameDialogValue(d3.select(event.currentTarget));
         await idb.renameSnapshot(state.sessionID, state.snapshotIndex, newName);
         state.snapshots[state.snapshotIndex].name = newName;
+        state.name = newName;
         state.updateHeaderCallback();
       });
   d3.select('#discardd')
@@ -296,7 +299,6 @@ function setState(state) {
     const height = d3.select("#frame").property("offsetHeight");
     state.setViewBox(width, height);
   }
-
   // Update all
   state.updateSnapshotCallback = () => {
     state.setFocusArea();
@@ -350,13 +352,9 @@ async function run() {
   const sessionid = await idb.getConfig("currentSession");
   if (!sessionid) { return; } // start from new session
 
-  // set view frame size (depends on browser)
-  const width = d3.select("#frame").property("offsetWidth");
-  const height = d3.select("#frame").property("offsetHeight");
   // open session
   const session = await idb.getSession(sessionid);
-  const state = new NetworkState(session, width, height);
-  setState(state);
+  setState(session);
 }
 
 

@@ -3,6 +3,8 @@
 
 import TransformState from  '../common/transform.js';
 
+import {default as scale} from '../common/scale.js';
+
 
 export default class NetworkState extends TransformState {
   constructor(session, width, height) {
@@ -16,6 +18,9 @@ export default class NetworkState extends TransformState {
       Object.keys(b).forEach(e => { a.add(e); })
       return a;
     }, new Set())]  // unique keys
+    this.nodeDomains = this.nodeFields.map(e => {
+      return scale.autoDomain(this.nodes.map(n => n[e]));
+    });
     this.nodes.forEach((e, i) => {
       e.__index = i;  // internal id for d3.force
       e.__selected = false;  // for multiple selection
@@ -26,6 +31,9 @@ export default class NetworkState extends TransformState {
       Object.keys(b).forEach(e => { a.add(e); })
       return a;
     }, new Set())]  // unique keys
+    this.edgeDomains = this.edgeFields.map(e => {
+      return scale.autoDomain(this.edges.map(n => n[e]));
+    });
     this.edges.forEach((e, i) => {
       // internal id for d3.force
       e.__source = e.source;
@@ -106,26 +114,26 @@ export default class NetworkState extends TransformState {
     };
     this.appearance = {
       nodeColor: {
-        field: null, rangePreset: 'default',
-        scale: 'linear', domain: [0, 1]
+        field: this.nodeFields[0], rangePreset: 'default',
+        scale: 'log', domain: [1e-6, 1e-9]
       },
       nodeSize: {
-        field: null, rangePreset: 'medium',
+        field: this.nodeFields[0], rangePreset: 'medium',
         scale: 'linear', domain: [1, 1]
       },
       nodeLabel: {
-        field: null, size: 20, visible: false
+        field: this.nodeFields[0], size: 20, visible: false
       },
       edgeColor: {
-        field: null, rangePreset: 'monogray',
+        field: this.edgeFields[0], rangePreset: 'monogray',
         scale: 'linear', domain: [0, 1]
       },
       edgeWidth: {
-        field: null, rangePreset: 'medium',
+        field: this.edgeFields[0], rangePreset: 'medium',
         scale: 'linear', domain: [0.5, 1]
       },
       edgeLabel: {
-        field: null, size: 12, visible: false
+        field: this.edgeFields[0], size: 12, visible: false
       }
     };
     this.snapshots = session.snapshots || [];
@@ -222,6 +230,7 @@ export default class NetworkState extends TransformState {
   }
 
   fitTransform() {  // dispatcher: fit button
+    this.setBoundary();
     this.stateChanged = true;
     const vh = this.viewBox.bottom;
     const vw = this.viewBox.right;

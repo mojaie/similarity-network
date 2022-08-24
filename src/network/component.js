@@ -59,50 +59,46 @@ function updateEdges(selection, records) {
 function updateNodeAttrs(selection, state) {
   const colorScaleFunc = scale.scaleFunction(state.appearance.nodeColor, "color");
   const sizeScaleFunc = scale.scaleFunction(state.appearance.nodeSize, "nodeSize");
+  const colorField = state.appearance.nodeColor.field;
+  const sizeField = state.appearance.nodeSize.field;
   const labelField = state.appearance.nodeLabel.field;
-  const textFormatFunc = value => {
-    return value
-    // return labelField.format === 'd3_format'
-    //  ? misc.formatNum(value, labelField.d3_format) : value;
-  };
+  const labelSize = state.appearance.nodeLabel.size;
+  const labelVisible = state.appearance.nodeLabel.visible;
   selection.selectAll('.node').select('.node-symbol')
-      .attr('r', d => sizeScaleFunc(d[state.appearance.nodeSize.field]))
-      .style('fill', d => colorScaleFunc(d[state.appearance.nodeColor.field]));
-  // TODO: tidy up (like rowFactory?)
+      .attr('r', d => sizeScaleFunc(d[sizeField]))
+      .style('fill', d => colorScaleFunc(d[colorField]));
   const htwidth = 200;
   const fo = selection.selectAll('.node').select('.node-html');
   fo.attr('x', -htwidth / 2)
-    .attr('y', d => state.showNodeImage ? svgWidth / 2 - 10
-      : parseFloat(sizeScaleFunc(d[state.appearance.nodeSize.field])))
+    .attr('y', d => state.showNodeImage ? svgWidth / 2 - 10 : sizeScaleFunc(d[sizeField]))
     .attr('width', htwidth)
     .attr('height', 1)
     .attr('overflow', 'visible');
   fo.select('div')
-    .style('font-size', `${state.appearance.nodeLabel.size}px`)
+    .style('font-size', `${labelSize}px`)
     .style('color', d => d.labelColor || "#cccccc")
     .style('text-align', 'center')
-    .style('display', state.appearance.nodeLabel.visible ? 'block' : 'none')
-    .html(d => textFormatFunc(d[state.appearance.nodeLabel.field]));
+    .style('display', labelVisible ? 'block' : 'none')
+    .html(d => d[labelField]);
 }
 
 
 function updateEdgeAttrs(selection, state) {
   const colorScaleFunc = scale.scaleFunction(state.appearance.edgeColor, "color");
   const widthScaleFunc = scale.scaleFunction(state.appearance.edgeWidth, "edgeWidth");
+  const colorField = state.appearance.edgeColor.field;
+  const widthField = state.appearance.edgeWidth.field;
   const labelField = state.appearance.edgeLabel.field;
-  const textFormatFunc = value => {
-    return value
-    //return labelField.format === 'd3_format'
-    //  ? misc.formatNum(value, labelField.d3_format) : value;
-  };
+  const labelSize = state.appearance.edgeLabel.size;
+  const labelVisible = state.appearance.edgeLabel.visible;
   selection.selectAll('.link').select('.edge-line')
-    .style('stroke', d => colorScaleFunc(d[state.appearance.edgeColor.field]))
-    .style('stroke-width', d => widthScaleFunc(d[state.appearance.edgeWidth.field]));
+    .style('stroke', d => colorScaleFunc(d[colorField]))
+    .style('stroke-width', d => widthScaleFunc(d[widthField]));
   selection.selectAll('.link').select('.edge-label')
-    .attr('font-size', state.appearance.edgeLabel.size)
-    .attr('visibility', state.appearance.edgeLabel.visible ? 'inherit' : 'hidden')
+    .attr('font-size', labelSize)
+    .attr('visibility', labelVisible ? 'inherit' : 'hidden')
     .style('fill', d => d.labelColor || "#cccccc")
-    .text(d => textFormatFunc(d[state.appearance.edgeLabel.field]));
+    .text(d => d[labelField]);
 }
 
 

@@ -35,6 +35,7 @@ function updateSelectBoxOptions(selection, items, keyfunc = d => d, namefunc = d
   options.enter()
     .append('option')
       .attr('value', keyfunc)
+    .merge(options)
       .text(namefunc);
 }
 

@@ -62,32 +62,37 @@ function submitDialog(selection, title) {
       .classed('modal-title', true)
       .text(title);
   header.append('button')
+      .classed('btn-close', true)
       .attr('type', 'button')
-      .attr('data-dismiss', 'modal')
-      .attr('aria-label', 'Close')
-      .classed('close', true)
-    .append('span')
-      .attr('aria-hidden', true)
-      .html('&times;');
+      .attr('data-bs-dismiss', 'modal')
+      .attr('aria-label', 'Close');
   // body
   base.append('div')
       .classed('modal-body', true);
   // footer
-  base.append('div')
-      .classed('modal-footer', true)
-    .append('button')
+  const footer = base.append('div')
+      .classed('modal-footer', true);
+  footer.append('button')
+      .classed('btn', true)
+      .classed('btn-secondary', true)
+      .attr('type', 'button')
+      .attr('data-bs-dismiss', "modal")
+      .text('Cancel');
+  footer.append('button')
       .classed('btn', true)
       .classed('btn-primary', true)
-      .classed('submit', true)
       .attr('type', 'button')
-      .attr('data-dismiss', 'modal')
-      .text('Submit');
+      .attr('data-bs-dismiss', 'modal')
+      .text('Save changes')
+      .on('click', () => {
+        selection.dispatch('submit');
+      });
 }
 
 
 
 function renameDialog(selection) {
-  const renameBox = selection.call(submitDialog, "New name")
+  const renameBox = selection.call(submitDialog, "Rename snapshot")
     .select('.modal-body').append('div')
       .classed('name', true)
       .call(box.textBox, 'New name');

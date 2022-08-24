@@ -7,8 +7,8 @@ import d3 from 'd3';
 const scales = {
   color: {
     default: {
-      range: ['#7fffd4'],
-      unknown: '#7fffd4'
+      range: ['#98fb98'],
+      unknown: '#98fb98'
     },
     monogray: {
       range: ['#cccccc'],
@@ -20,6 +20,10 @@ const scales = {
     },
     green: {
       range: ['#778899', '#98fb98'],
+      unknown: '#f0f0f0'
+    },
+    igreen: {
+      range: ['#98fb98', '#778899'],
       unknown: '#f0f0f0'
     },
     yellow: {
@@ -38,6 +42,10 @@ const scales = {
     }
   },
   nodeSize: {
+    constant: {
+      range: [40, 40],
+      unknown: 40
+    },
     small: {
       range: [10, 40],
       unknown: 10
@@ -52,6 +60,10 @@ const scales = {
     }
   },
   edgeWidth: {
+    constant: {
+      range: [10, 10],
+      unknown: 10
+    },
     thin: {
       range: [2, 10],
       unknown: 10
@@ -101,13 +113,18 @@ function scaleFunction(params, rangeType) {
   const range = scale.range;
   const unknown = scale.unknown;
 
-  let domain = null;
-  if (range.length === 3) {
-    const mid = (parseFloat(params.domain[0]) + parseFloat(params.domain[1])) / 2;
-    domain = [params.domain[0], mid, params.domain[1]];
-  } else {
-    domain = params.domain;
+  // Auto domain: IQR -> extrapolated 0-100% range
+  let domain = [0, 1];
+  if (params.domain !== null) {
+    if (params.scale === "linear") {
+      const ext = (params.domain[1] - params.domain[0]) / 2;
+      domain = [params.domain[0] - ext, params.domain[1] + ext];
+    } else if (params.scale === "log") {
+      const ext = Math.sqrt(params.domain[1] / params.domain[0]);
+      domain = [params.domain[0] / ext, params.domain[1] * ext];
+    }
   }
+
   // Build
   let scaleFunc = types[params.scale].func();
   scaleFunc = scaleFunc.domain(domain);
@@ -136,6 +153,27 @@ function scaleFunction(params, rangeType) {
   };
 }
 
+const NUM_LIKE_THRESHOLD = 0.5;
+
+function autoDomain(arr) {
+  // caluculate IQR
+  const nums = arr.filter(e => typeof e === "number");
+  nums.sort((a, b) => a - b);
+  const cnt = nums.length;
+  if (cnt < 4 || cnt / arr.length < NUM_LIKE_THRESHOLD) {
+    return null;  // not numeric field
+  }
+  const lowcnt = Math.floor(cnt / 2);
+  const qcnt = Math.floor(lowcnt / 2);
+  if (lowcnt % 2 === 1) {
+    return [nums[qcnt], nums[nums.length - qcnt - 1]];
+  } else {
+    const l = (nums[qcnt - 1] + nums[qcnt]) / 2;
+    const u = (nums[nums.length - qcnt - 1] + nums[nums.length - qcnt]) / 2;
+    return [l, u];
+  }
+}
+
 
 function isD3Format(notation) {
   try {
@@ -148,5 +186,6 @@ function isD3Format(notation) {
 
 
 export default {
-  scales, colorScales, nodeSizeScales, edgeWidthScales, types, scaleFunction, isD3Format
+  scales, colorScales, nodeSizeScales, edgeWidthScales, types,
+  scaleFunction, autoDomain, isD3Format
 };

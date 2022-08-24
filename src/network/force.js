@@ -101,7 +101,6 @@ function setForce(selection, state) {
       })
       .on('end', () => {
         state.tickCallback(simulation);
-        state.setBoundary();
         state.updateVisibility();
       });
 
