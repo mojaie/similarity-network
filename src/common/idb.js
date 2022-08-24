@@ -39,11 +39,12 @@ const instance = {
  */
 async function clear(dbid) {
   const db = await instance[dbid];
-  const tr = db.transaction(db.name, 'readwrite').objectStore(db.name);
+  const transaction = db.transaction(db.name, 'readwrite');
+  const store = transaction.objectStore(db.name);
   return new Promise((resolve, reject) => {
-    const req = tr.clear();
-      req.onsuccess = () => resolve();
-      req.onerror = event => reject(event);
+    const request = store.clear();
+    request.onerror = event => reject(event);
+    transaction.oncomplete = () => resolve();  // wait for transaction complete
   });
 }
 
@@ -64,11 +65,12 @@ function clearAll() {
  */
 async function getConfig(key) {
   const db = await instance.config;
-  const tr = db.transaction(db.name).objectStore(db.name);
+  const transaction = db.transaction(db.name)
+  const store = transaction.objectStore(db.name);
   return new Promise((resolve, reject) => {
-    const req = tr.get(key);
-    req.onsuccess = event => resolve(event.target.result && event.target.result.value);
-    req.onerror = event => reject(event);
+    const request = store.get(key);
+    request.onsuccess = event => resolve(event.target.result && event.target.result.value);
+    request.onerror = event => reject(event);
   });
 }
 
@@ -81,11 +83,12 @@ async function getConfig(key) {
  */
 async function putConfig(key, value) {
   const db = await instance.config;
-  const tr = db.transaction(db.name, 'readwrite').objectStore(db.name);
+  const transaction = db.transaction(db.name, 'readwrite')
+  const store = transaction.objectStore(db.name);
   return new Promise((resolve, reject) => {
-    const req = tr.put({key: key, value: value});
-    req.onsuccess = () => resolve();
-    req.onerror = event => reject(event);
+    const request = store.put({key: key, value: value});
+    request.onerror = event => reject(event);
+    transaction.oncomplete = () => resolve();  // wait for transaction complete
   });
 }
 
@@ -96,20 +99,21 @@ async function putConfig(key, value) {
  */
  async function getSessionHeaders() {
   const db = await instance.session;
-  const tr = db.transaction(db.name).objectStore(db.name);
+  const transaction = db.transaction(db.name)
+  const store = transaction.objectStore(db.name);
   return new Promise(resolve => {
-    const res = [];
-    tr.openCursor().onsuccess = event => {
+    const response = [];
+    store.openCursor().onsuccess = event => {
       const cursor = event.target.result;
       if (cursor) {
         const rcd = {
           id: cursor.value.id,
           name: cursor.value.name
         };
-        res.push(rcd);
+        response.push(rcd);
         cursor.continue();
       } else {
-        resolve(res);
+        resolve(response);
       }
     };
   });
@@ -123,11 +127,12 @@ async function putConfig(key, value) {
  */
 async function getSession(id) {
   const db = await instance.session;
-  const tr = db.transaction(db.name).objectStore(db.name);
+  const transaction = db.transaction(db.name)
+  const store = transaction.objectStore(db.name);
   return new Promise((resolve, reject) => {
-    const req = tr.get(id);
-    req.onsuccess = event => resolve(event.target.result);
-    req.onerror = event => reject(event);
+    const request = store.get(id);
+    request.onsuccess = event => resolve(event.target.result);
+    request.onerror = event => reject(event);
   });
 }
 
@@ -139,14 +144,15 @@ async function getSession(id) {
  */
 async function putSession(data) {
   const db = await instance.session;
-  const tr = db.transaction(db.name, 'readwrite').objectStore(db.name);
+  const transaction = db.transaction(db.name, 'readwrite')
+  const store = transaction.objectStore(db.name);
   if (!data.hasOwnProperty("id")) {
     data.id = misc.uuidv4();  // new ID
   }
   return new Promise((resolve, reject) => {
-    const req = tr.put(data);
-    req.onsuccess = () => resolve(data.id);
-    req.onerror = event => reject(event);
+    const request = store.put(data);
+    request.onerror = event => reject(event);
+    transaction.oncomplete = () => resolve(data.id);  // wait for transaction complete
   });
 }
 
@@ -158,11 +164,12 @@ async function putSession(data) {
  */
 async function deleteSession(id) {
   const db = await instance.session;
-  const tr = db.transaction(db.name, 'readwrite').objectStore(db.name);
+  const transaction = db.transaction(db.name, 'readwrite');
+  const store = transaction.objectStore(db.name);
   return new Promise((resolve, reject) => {
-    const req = tr.delete(id);
-    req.onsuccess = () => resolve();
-    req.onerror = event => reject(event);
+    const request = store.delete(id);
+    request.onerror = event => reject(event);
+    transaction.oncomplete = () => resolve();  // wait for transaction complete
   });
 }
 
@@ -175,18 +182,19 @@ async function deleteSession(id) {
  */
 async function appendSnapshot(sessionid, snapshot) {
   const db = await instance.session;
-  const tr = db.transaction(db.name, 'readwrite').objectStore(db.name);
+  const transaction = db.transaction(db.name, 'readwrite')
+  const store = transaction.objectStore(db.name);
   const data = await new Promise((resolve, reject) => {
-    const req = tr.get(sessionid);
-    req.onsuccess = event => resolve(event.target.result);
-    req.onerror = event => reject(event);
+    const request = store.get(sessionid);
+    request.onsuccess = event => resolve(event.target.result);
+    request.onerror = event => reject(event);
   });
   if (!data.hasOwnProperty("snapshots")) { data.snapshots = []; }
   data.snapshots.push(snapshot);
   return new Promise((resolve, reject) => {
-    const req = tr.put(data);
-    req.onsuccess = () => resolve();
-    req.onerror = event => reject(event);
+    const request = store.put(data);
+    request.onerror = event => reject(event);
+    transaction.oncomplete = () => resolve();  // wait for transaction complete
   });
 }
 
@@ -199,17 +207,18 @@ async function appendSnapshot(sessionid, snapshot) {
  */
  async function renameSnapshot(sessionid, idx, name) {
   const db = await instance.session;
-  const tr = db.transaction(db.name, 'readwrite').objectStore(db.name);
+  const transaction = db.transaction(db.name, 'readwrite')
+  const store = transaction.objectStore(db.name);
   const data = await new Promise((resolve, reject) => {
-    const req = tr.get(sessionid);
-    req.onsuccess = event => resolve(event.target.result);
-    req.onerror = event => reject(event);
+    const request = store.get(sessionid);
+    request.onsuccess = event => resolve(event.target.result);
+    request.onerror = event => reject(event);
   });
   data.snapshots[idx].name = name;
   return new Promise((resolve, reject) => {
-    const req = tr.put(data);
-    req.onsuccess = () => resolve();
-    req.onerror = event => reject(event);
+    const request = store.put(data);
+    request.onerror = event => reject(event);
+    transaction.oncomplete = () => resolve();  // wait for transaction complete
   });
 }
 
@@ -222,17 +231,18 @@ async function appendSnapshot(sessionid, snapshot) {
  */
  async function deleteSnapshot(sessionid, idx) {
   const db = await instance.session;
-  const tr = db.transaction(db.name, 'readwrite').objectStore(db.name);
+  const transaction = db.transaction(db.name, 'readwrite');
+  const store = transaction.objectStore(db.name);
   const data = await new Promise((resolve, reject) => {
-    const req = tr.get(sessionid);
-    req.onsuccess = event => resolve(event.target.result);
-    req.onerror = event => reject(event);
+    const request = store.get(sessionid);
+    request.onsuccess = event => resolve(event.target.result);
+    request.onerror = event => reject(event);
   });
   data.snapshots.splice(idx, 1);
   return new Promise((resolve, reject) => {
-    const req = tr.put(data);
-    req.onsuccess = () => resolve();
-    req.onerror = event => reject(event);
+    const request = store.put(data);
+    request.onerror = event => reject(event);
+    transaction.oncomplete = () => resolve();  // wait for transaction complete
   });
 }
 

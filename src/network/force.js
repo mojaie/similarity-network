@@ -3,7 +3,6 @@
 
 import d3 from 'd3';
 
-import {default as component} from './component.js';
 import {default as interaction} from './interaction.js';
 
 
@@ -52,7 +51,7 @@ function forceDragListener(selection, simulation, state) {
   return d3.drag()
     .on('start', event => {
       state.stateChanged = true;
-      if (!event.active) state.relaxNotifier();
+      if (!event.active) state.relaxDispatcher();
     })
     .on('drag', event => {
       event.subject.fx = event.x;
@@ -85,47 +84,44 @@ function unstick(selection, simulation, state) {
       d.fy = null;
     });
   state.dragListener = forceDragListener(selection, simulation, state);
+  state.stateChanged = true;
   state.forceActive = true;
 }
 
 
 function setForce(selection, state) {
-  state.setForceNotifier = () => {
+  state.updateFilterCallback = () => {
     const simulation = forceSimulation(
         state.config.forceParam, state.fieldWidth, state.fieldHeight);
     simulation.nodes(state.fnodes)
       .force('link').links(state.fedges);
     simulation
       .on('tick', () => {
-        selection.selectAll(".node").call(component.updateNodeCoords);
-        selection.selectAll(".link").call(component.updateEdgeCoords);
         state.tickCallback(simulation);
       })
       .on('end', () => {
-        state.setBoundary();
-        state.updateComponentNotifier();
         state.tickCallback(simulation);
+        state.setBoundary();
+        state.updateVisibility();
       });
 
-    state.stickNotifier = () => {
+    state.stickDispatcher = () => {
       selection.call(stick, simulation, state);
     };
-    state.relaxNotifier = () => {
-      state.stateChanged = true;
+    state.relaxDispatcher = () => {
       selection.call(unstick, simulation, state);
       simulation.alpha(0.1).restart();
     };
-    state.restartNotifier = () => {
-      state.stateChanged = true;
+    state.restartDispatcher = () => {
       selection.call(unstick, simulation, state);
       simulation.alpha(1).restart();
     };
 
 
     if (state.forceActive) {
-      state.restartNotifier();
+      state.restartDispatcher();
     } else {
-      state.stickNotifier();
+      state.stickDispatcher();
     }
   };
 }

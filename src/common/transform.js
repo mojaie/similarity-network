@@ -14,9 +14,6 @@ export default class TransformState {
     viewBox: SVG canvas area, depends on browser size, can be changed by event.resize.
     focusArea: display area obtained by applying transform to viewbox
     -> focusArea = transform(viewBox)
-
-    boundary: components area, depends on max/min coords of components.
-    fit: operation to find transform where focusArea = boundary
     */
 
     this.viewBox = {
@@ -29,20 +26,12 @@ export default class TransformState {
     this.focusArea = {};
     this.focusAreaMargin = 50;
 
-    this.boundary = {
-      top: 0,
-      right: this.fieldWidth,
-      bottom: this.fieldHeight,
-      left: 0
-    };
     this.transform = transform || {x: 0, y: 0, k: 1};
     this.prevTransform = {
       x: this.transform.x,
       y: this.transform.y,
       k: this.transform.k
     };
-
-    this.stateChanged = false;  // if true, there are unsaved changes
   }
 
   setFocusArea() {
@@ -67,28 +56,11 @@ export default class TransformState {
 
   setTransform(tx, ty, tk) {
     // called by transform operation
-    this.stateChanged = true;
     this.transform.x = tx;
     this.transform.y = ty;
     this.transform.k = tk;
     // this.showTransform(); // debug
     this.setFocusArea();
-  }
-
-  fitTransform() {
-    const vh = this.viewBox.bottom;
-    const vw = this.viewBox.right;
-    const vr = vw / vh;
-    const bh = this.boundary.bottom - this.boundary.top;
-    const bw = this.boundary.right - this.boundary.left;
-    const br = bw / bh;
-    const isPortrait = vr >= br;
-    const tk = isPortrait ? vh / bh : vw / bw;
-    const adjustH = isPortrait ? (vw - bw * tk) / 2 : 0;
-    const adjustV = isPortrait ? 0 : (vh - bh * tk) / 2;
-    const tx = -(this.boundary.left) * tk + adjustH;
-    const ty = -(this.boundary.top) * tk + adjustV;
-    this.setTransform(tx, ty, tk);
   }
 
   showTransform() {

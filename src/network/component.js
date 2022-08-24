@@ -19,8 +19,7 @@ function updateNodes(selection, records, showStruct) {
   nodes.exit().remove();
   const entered = nodes.enter()
     .append('g')
-      .attr('class', 'node')
-      .call(updateNodeCoords);
+      .attr('class', 'node');
   entered.append('circle')
       .attr('class', 'node-symbol');
   entered.append('g')
@@ -29,7 +28,8 @@ function updateNodes(selection, records, showStruct) {
   entered.append('foreignObject')
       .attr('class', 'node-html')
     .append('xhtml:div');
-  const merged = entered.merge(nodes);
+  const merged = entered.merge(nodes)
+      .call(updateNodeCoords);
   if (showStruct) {
     merged.select('.node-image').html(d => d.structure);
   } else {
@@ -51,8 +51,8 @@ function updateEdges(selection, records) {
   entered.append('text')
       .attr('class', 'edge-label')
       .attr('text-anchor', 'middle');
-  // draw all components and then
-  entered.call(updateEdgeCoords);
+  entered.merge(edges)
+      .call(updateEdgeCoords);
 }
 
 
@@ -177,52 +177,48 @@ function viewComponent(selection) {
 }
 
 
-function updateView(selection, state) {
+function updateViewBox(selection, state) {
   selection
       .attr('viewBox', `0 0 ${state.viewBox.right} ${state.viewBox.bottom}`);
   selection.select(".boundary")
       .attr('width', state.viewBox.right)
       .attr('height', state.viewBox.bottom)
+  selection.call(updateField, state);
+}
+
+
+function updateField(selection, state) {
   const tf = state.transform;
   selection.select('.field')
       .attr('transform', `translate(${tf.x}, ${tf.y}) scale(${tf.k})`);
+}
 
-  // Apply changes in nodes and edges displayed
-  state.updateComponentNotifier = () => {
-    state.updateVisibility();
-    selection.call(updateComponents, state);
-    // state.updateLegendNotifier();
-    state.updateHeaderNotifier();
-    state.updateInteractionNotifier();  // Apply drag events to each nodes
-  };
 
-  // for only browser resize event
-  state.updateViewNotifier = () => {
-    state.updateComponentNotifier();
-    selection.call(updateView, state);
+function setViewCallbacks(selection, state) {
+  state.resizeCallback = () => {
+    selection.call(updateViewBox, state);
   }
-
-  state.updateNodeAttrNotifier = () => {
+  state.zoomCallback = () => {  // override by interaction
+    selection.call(updateField, state);
+  }
+  state.updateVisibilityCallback = () => {  // override by interaction
+    selection.call(updateComponents, state);
+  }
+  state.updateCoordsCallback = () => {
+    selection.selectAll(".node").call(updateNodeCoords);
+    selection.selectAll(".link").call(updateEdgeCoords);
+  }
+  state.updateNodeAttrCallback = () => {
     selection.select(".node-layer").call(updateNodeAttrs, state);
-    // state.updateLegendNotifier();
   };
-  state.updateEdgeAttrNotifier = () => {
+  state.updateEdgeAttrCallback = () => {
     selection.select(".edge-layer").call(updateEdgeAttrs, state);
   };
-  /*
-  state.updateLegendNotifier = () => {
-    legendGroup.call(legend.updateLegendGroup,
-                     state.viewBox, state.legendOrient);
-    legendGroup.select('.nodecolor')
-        .attr('visibility', state.nodeColor.legend ? 'inherit' : 'hidden')
-        .call(legend.updateColorBarLegend, state.nodeColor);
-  };
-  */
 }
 
 
 export default {
   updateNodes, updateEdges, updateNodeCoords, updateEdgeCoords,
   updateNodeAttrs, updateEdgeAttrs, updateNodeSelection,
-  updateComponents, viewComponent, updateView
+  updateComponents, viewComponent, updateViewBox, updateField, setViewCallbacks
 };

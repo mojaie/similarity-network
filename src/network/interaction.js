@@ -66,7 +66,6 @@ function zoomListener(selection, state) {
           p.x = t.x;
           p.y = t.y;
           p.k = t.k;
-          state.updateComponentNotifier();
         }
       }
     })
@@ -76,7 +75,6 @@ function zoomListener(selection, state) {
       p.x = t.x;
       p.y = t.y;
       p.k = t.k;
-      state.updateComponentNotifier();
     });
 }
 
@@ -167,7 +165,8 @@ function multiSelectListener(selection, state) {
 }
 
 
-function resume(selection, tf) {
+function resume(selection, state) {
+  const tf = state.transform;
   selection
       .call(
         d3.zoom().transform,
@@ -198,7 +197,6 @@ function setInteraction(selection, state) {
       .on('touchstart', event => { event.preventDefault(); })
       .on('touchmove', event => { event.preventDefault(); })
       .on('click', event => {
-        state.stateChanged = true;
         state.nodes.forEach((e, i) => {
           state.nodes[i].__selected = false;
         });
@@ -212,7 +210,8 @@ function setInteraction(selection, state) {
     selection.style("cursor", "crosshair");
     state.zoomListener = rectSelectListener(selection, state);
     state.selectListener = multiSelectListener(selection, state);
-    state.updateInteractionNotifier();
+    selection.call(state.zoomListener);
+    selection.selectAll('.node').call(state.selectListener);
   });
 
   // Exit multiple select mode
@@ -221,7 +220,8 @@ function setInteraction(selection, state) {
     selection.style("cursor", "auto");
     state.zoomListener = zoomListener(selection, state);
     state.selectListener = selectListener(selection, state);
-    state.updateInteractionNotifier();
+    selection.call(state.zoomListener);
+    selection.selectAll('.node').call(state.selectListener);
   });
 
   // Event listeners
@@ -229,19 +229,20 @@ function setInteraction(selection, state) {
   state.selectListener = selectListener(selection, state);
   state.dragListener = dragListener(selection, state);
 
+  state.zoomCallback = () => {
+    selection.call(resume, state);
+  }
   // Update interaction events
-  state.updateInteractionNotifier = () => {
+  state.updateVisibilityCallback = () => {
+    selection.call(component.updateComponents, state);
     selection.call(state.zoomListener);
     selection.selectAll('.node').call(state.selectListener);
     selection.selectAll('.node').call(state.dragListener);
-    selection.call(resume, state.transform);
-  };
+  }
 
   // Fit to the viewBox
-  state.fitNotifier = () => {
+  state.fitDispatcher = () => {
     state.fitTransform();
-    state.updateComponentNotifier();
-    selection.call(resume, state.transform);
   };
 }
 

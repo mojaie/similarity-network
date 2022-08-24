@@ -37,7 +37,6 @@ export default class NetworkState extends TransformState {
     // filtered elements
     this.fnodes = [];
     this.fedges = [];
-    this.adjacency = [];
 
     // visible elements
     this.vnodes = [];
@@ -47,33 +46,51 @@ export default class NetworkState extends TransformState {
     this.showNodeImage = false;
     this.showEdge = false;
     this.forceActive = true;
+    this.stateChanged = false;  // if true, there are unsaved changes
 
-    // Event listeners
+    // boundary: components area, depends on max/min coords of components.
+    // fit: operation to find transform where focusArea = boundary
+    this.boundary = {
+      top: 0,
+      right: this.fieldWidth,
+      bottom: this.fieldHeight,
+      left: 0
+    }
+
+    // Client event listeners
     this.zoomListener = null;
     this.dragListener = null;
+    // update viewBox component when browser resize event is dispatched and setViewBox is called
+    this.resizeCallback = () => {};
+    // dispatched when fit is called
+    this.fitDispatcher = () => {};
 
-    // Event notifiers
-    this.updateHeaderNotifier = () => {};
-    this.updateControlBoxNotifier = () => {};
-    this.updateViewNotifier = () => {};
-    this.updateComponentNotifier = () => {};
-    this.updateNodeAttrNotifier = () => {};
-    this.updateEdgeAttrNotifier = () => {};
-    this.updateInteractionNotifier = () => {};
-    this.fitNotifier = () => {};
-    this.setForceNotifier = () => {};
-    this.stickNotifier = () => {};
-    this.relaxNotifier = () => {};
-    this.restartNotifier = () => {};
-    this.tickCallback = () => {};
-    this.setSnapshotCallback = () => {
-      this.updateHeaderNotifier();
-      this.updateControlBoxNotifier();
-      this.updateFilter();
-      this.setForceNotifier();
-      this.updateViewNotifier();
+    this.updateHeaderCallback = () => {};
+    this.updateMenuButtonCallback = () => {};
+    this.updateControlBoxCallback = () => {};
+
+    // update component attributes when controlBox form values changed
+    this.updateNodeAttrCallback = () => {};
+    this.updateEdgeAttrCallback = () => {};
+    this.updateCoordsCallback = () => {};
+
+    // update component visibility and events when vnodes/vedges changed
+    this.updateVisibilityCallback = () => {};
+    // update component filters and forces when fnodes/fedges changed
+    this.updateFilterCallback = () => {};
+    // update all when snapshot changed
+    this.updateSnapshotCallback = () => {};
+
+    // update coords and force indicators in each ticks
+    this.updateForceIndicatorCallback = () => {};
+    this.tickCallback = sim => {
+      this.updateCoordsCallback();
+      this.updateForceIndicatorCallback(sim);
     };
-
+    // dispatched when force operations are called
+    this.stickDispatcher = () => {};
+    this.relaxDispatcher = () => {};
+    this.restartDispatcher = () => {};
 
     // Initialize snapshot
     this.name = "default";
@@ -113,26 +130,26 @@ export default class NetworkState extends TransformState {
     };
     this.snapshots = session.snapshots || [];
     this.snapshotIndex = this.snapshots.length - 1;
-    this.applySnapshot(this.snapshotIndex);
   }
 
-  setSnapshot(idx) {
+  updateSnapshot(idx) {
     if (idx >= 0) {  // idx = -1 -> no snapshots (default configuration)
-      // TODO transform
-      this.forceActive = false;
       this.stateChanged = false;
+      this.forceActive = false;
       const snapshot = this.snapshots[idx];
       this.name = snapshot.name;
-      this.filters = snapshot.filters;
-      this.config = snapshot.config;
-      this.appearance = snapshot.appearance;
-      this.transform = snapshot.transform;
+      this.filters = JSON.parse(JSON.stringify(snapshot.filters));
+      this.config = JSON.parse(JSON.stringify(snapshot.config));
+      this.appearance = JSON.parse(JSON.stringify(snapshot.appearance));
+      this.transform = Object.assign({}, snapshot.transform);
       snapshot.positions.forEach((e, i) => {
         this.nodes[i].x = e.x;
         this.nodes[i].y = e.y;
+        this.nodes[i].fx = e.x;  // force will update x by fx
+        this.nodes[i].fy = e.y;  // force will update y by fy
       });
     }
-    this.setSnapshotCallback();
+    this.updateSnapshotCallback();
   }
 
   getSnapshot() {
@@ -153,7 +170,7 @@ export default class NetworkState extends TransformState {
   /**
    * update this.nodes and this.edges used by d3.force
    */
-  setFilter() {
+  updateFilter() {
     // fnodes and fedges used for force layout
     // called by filter
 
@@ -173,16 +190,19 @@ export default class NetworkState extends TransformState {
     */
     this.fnodes = this.nodes;
     this.fedges = this.edges;
-    // update adjacency
-    this.adjacency.splice(0);
-    this.nodes.forEach(e => {
-      this.adjacency.push([]);
-    });
-    this.fedges.forEach(e => {
-      this.adjacency[e.__source].push([e.__target, e]);
-      this.adjacency[e.__target].push([e.__source, e]);
-    });
-    // this.setFilterCallback();
+    this.updateFilterCallback();
+    this.zoomCallback();
+    this.updateVisibility();
+  }
+
+  setViewBox(width, height) {  // dispatcher: resize browser
+    super.setViewBox(width, height);
+    this.resizeCallback();  // component.updateView()
+  }
+
+  setTransform(tx, ty, tk) {
+    super.setTransform(tx, ty, tk);
+    this.updateVisibility();
   }
 
   setBoundary() {
@@ -201,9 +221,28 @@ export default class NetworkState extends TransformState {
     // this.showBoundary(); // debug
   }
 
-  setVisibility() {
+  fitTransform() {  // dispatcher: fit button
+    this.stateChanged = true;
+    const vh = this.viewBox.bottom;
+    const vw = this.viewBox.right;
+    const vr = vw / vh;
+    const bh = this.boundary.bottom - this.boundary.top;
+    const bw = this.boundary.right - this.boundary.left;
+    const br = bw / bh;
+    const isPortrait = vr >= br;
+    const tk = isPortrait ? vh / bh : vw / bw;
+    const adjustH = isPortrait ? (vw - bw * tk) / 2 : 0;
+    const adjustV = isPortrait ? 0 : (vh - bh * tk) / 2;
+    const tx = -(this.boundary.left) * tk + adjustH;
+    const ty = -(this.boundary.top) * tk + adjustV;
+    this.setTransform(tx, ty, tk);
+    this.zoomCallback();
+    this.updateVisibility();
+  }
+
+  updateVisibility() {
     // vnodes and vedges used for component drawing
-    // called by zoom and pan
+    // dispatched when fnodes or focusArea are changed
     this.vnodes = this.fnodes.filter(e => {
       return e.y > this.focusArea.top && e.x > this.focusArea.left
         && e.y < this.focusArea.bottom && e.x < this.focusArea.right;
@@ -212,7 +251,9 @@ export default class NetworkState extends TransformState {
     this.vedges = this.fedges.filter(e => {
       return vn.has(e.__source) || vn.has(e.__target);
     });
-    // this.setVisibilityCallback();
+    //console.log(JSON.parse(JSON.stringify(this.vnodes)))
+    this.updateVisibilityCallback();
+    this.updateMenuButtonCallback();
   }
 
 }

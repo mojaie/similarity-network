@@ -67,10 +67,10 @@ function updateLayoutControl(selection, state) {
   // Fit
   selection.select('.fit')
       .on('click', function () {
-        state.fitNotifier();
+        state.fitDispatcher();
       });
   // Force layout
-  state.tickCallback = (simulation) => {
+  state.updateForceIndicatorCallback = (simulation) => {
     const alpha = simulation.alpha();
     const isStopped = alpha <= simulation.alphaMin();
     const progress = parseInt(isStopped ? 0 : alpha * 100);
@@ -91,14 +91,14 @@ function updateLayoutControl(selection, state) {
           .select('.progress-bar')
             .style('width', `0%`)
             .attr('aria-valuenow', 0);
-        value ? state.stickNotifier() : state.relaxNotifier();
-        state.updateComponentNotifier();
+        value ? state.stickDispatcher() : state.relaxDispatcher();
+        state.updateVisibility();
       });
   selection.select('.forceparam')
       .call(lbox.updateSelectBoxValue, state.config.forceParam)
       .on('change', () => {
         state.config.forceParam = lbox.selectBoxValue(selection);
-        state.setForceNotifier();
+        state.updateFilter();
       });
   selection.select('.perturb')
       .on('click', function () {
@@ -106,7 +106,7 @@ function updateLayoutControl(selection, state) {
         selection.select('.stick')
             .call(box.updateCheckBox, false)
             .dispatch('change');
-        state.restartNotifier();
+        state.restartDispatcher();
       });
   // TODO: random
 
@@ -252,7 +252,7 @@ function NodeControlBox(selection) {
 function updateNodeControl(selection, state) {
   selection.on('change', () => {
     state.stateChanged = true;
-    state.updateNodeAttrNotifier();
+    state.updateNodeAttrCallback();
   });
 
   selection.select('.colorfield')
@@ -309,9 +309,9 @@ function updateNodeControl(selection, state) {
   selection.select('.shownodeimage')
       .call(box.updateCheckBox, state.config.alwaysShowNodeImage)
       .on('change', event => {
-        state.stateChanged = false;
+        state.stateChanged = true;
         state.config.alwaysShowNodeImage = box.checkBoxValue(selection);
-        state.updateComponentNotifier();
+        state.updateVisibility();
         event.stopPropagation();
       });
 }
@@ -421,25 +421,25 @@ function EdgeControlBox(selection) {
 }
 
 function updateEdgeControl(selection, state) {
+  selection.on('change', () => {
+    state.stateChanged = true;
+    state.updateEdgeAttrCallback();
+  });
   selection.select('.colorfield')
       .call(lbox.updateSelectBoxOptions, state.edgeFields)
       .call(lbox.updateSelectBoxValue, state.appearance.edgeColor.field)
       .on('change', () => {
-        state.stateChanged = true;
         state.appearance.edgeColor.field = lbox.selectBoxValue(selection);
-        state.updateEdgeAttrNotifier();
       });
   selection.select('.colorrange')
       .call(lbox.updateColorScaleBox, state.appearance.edgeColor.rangePreset)
       .on('change', () => {
         state.appearance.edgeColor.rangePreset = lbox.colorScaleBoxValue(selection);
-        state.updateEdgeAttrNotifier();
       });
   selection.select('.colorscale')
       .call(lbox.updateSelectBoxValue, state.appearance.edgeColor.scale)
       .on('change', () => {
         state.appearance.edgeColor.scale = lbox.selectBoxValue(selection);
-        state.updateEdgeAttrNotifier();
       });
 
   selection.select('.widthfield')
@@ -447,39 +447,33 @@ function updateEdgeControl(selection, state) {
       .call(lbox.updateSelectBoxValue, state.appearance.edgeWidth.field)
       .on('change', () => {
         state.appearance.edgeWidth.field = lbox.selectBoxValue(selection);
-        state.updateEdgeAttrNotifier();
       });
   selection.select('.widthrange')
       .call(lbox.updateSelectBoxValue, state.appearance.edgeWidth.rangePreset)
       .on('change', () => {
         state.appearance.edgeWidth.rangePreset = lbox.selectBoxValue(selection);
-        state.updateEdgeAttrNotifier();
       });
   selection.select('.widthscale')
       .call(lbox.updateSelectBoxValue, state.appearance.edgeWidth.scale)
       .on('change', () => {
         state.appearance.edgeWidth.scale = lbox.selectBoxValue(selection);
-        state.updateEdgeAttrNotifier();
       });
 
   selection.select('.labelvisible')
       .call(box.updateCheckBox, state.appearance.edgeLabel.visible)
       .on('change', () => {
         state.appearance.edgeLabel.visible = box.checkBoxValue(selection);
-        state.updateEdgeAttrNotifier();
       });
   selection.select('.labelfield')
       .call(lbox.updateSelectBoxOptions, state.edgeFields)
       .call(lbox.updateSelectBoxValue, state.appearance.edgeLabel.field)
       .on('change', () => {
         state.appearance.edgeLabel.field = lbox.selectBoxValue(selection);
-        state.updateEdgeAttrNotifier();
       });
   selection.select('.labelsize')
       .call(box.updateFormValue, state.appearance.edgeLabel.size)
       .on('change', () => {
         state.appearance.edgeLabel.size = box.formValue(selection);
-        state.updateEdgeAttrNotifier();
       });
 
   selection.select('.showedge')
@@ -487,7 +481,7 @@ function updateEdgeControl(selection, state) {
       .on('change', event => {
         state.stateChanged = true;
         state.config.alwaysShowEdge = box.checkBoxValue(selection);
-        state.updateComponentNotifier();
+        state.updateVisibility();
         event.stopPropagation();
       });
 }
@@ -653,7 +647,7 @@ function updateControlBox(selection, state) {
   selection.select('#control-stat')
       .call(updateStatistics, state);
 
-  state.updateControlBoxNotifier = () => {
+  state.updateControlBoxCallback = () => {
     selection.call(updateControlBox, state);
   };
 }

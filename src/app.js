@@ -161,28 +161,24 @@ function updateSnapshotMenu(selection, state) {
       .on('change', event => {
         const i = lbox.selectBoxValueIndex(d3.select(event.currentTarget));
         state.snapshotIndex = i;
-        state.applySnapshot(i);
-        state.updateHeaderNotifier();
-        state.updateViewNotifier();
+        state.updateSnapshot(i);
       })
-      .select("select")
-        .attr('disabled', state.stateChanged ? true : null);
+    .select("select")
+      .attr('disabled', state.stateChanged ? true : null);
   // Save snapshot
   selection.select('.save')
       .classed('d-none', !state.stateChanged)
       .on('click', async () => {
-        state.stickNotifier();
+        state.stickDispatcher();
         const snapshot = state.getSnapshot();
         await idb.appendSnapshot(state.sessionID, snapshot);
-        state.stateChanged = false;
         state.snapshots.push(snapshot);
         state.snapshotIndex = state.snapshots.length - 1;
-        state.applySnapshot(state.snapshotIndex);
-        state.updateHeaderNotifier();
+        state.updateSnapshot(state.snapshotIndex);
       });
   // discard change
   selection.select('.discard')
-      .classed('d-none', !state.stateChanged)
+      .classed('d-none', !state.stateChanged || state.snapshots.length == 0)
       .on('click', function () {
         const control = new bootstrap.Modal(document.getElementById("discardd"));
         control.toggle();
@@ -220,11 +216,98 @@ function updateHeaderMenu(selection, state) {
   selection.select("#header-snapshot")
       .call(updateSnapshotMenu, state);
 
-  state.updateHeaderNotifier = () => {
+  state.updateHeaderCallback = () => {
+    selection.call(updateHeaderMenu, state);
+  };
+  state.updateMenuButtonCallback = () => {
     selection.call(updateHeaderMenu, state);
   };
 }
 
+
+function setState(state) {
+  console.log(state.snapshotIndex)
+  console.log(state.snapshots.length)
+  // Title
+  d3.select('title').text(state.sessionName);
+
+  // Update contents
+  d3.select('#header')
+      .call(updateHeaderMenu, state);
+  d3.select("#view")
+      .call(component.setViewCallbacks, state)
+      .call(force.setForce, state)
+      .call(interaction.setInteraction, state);
+  d3.select('#control')
+      .call(control.updateControlBox, state);
+
+  // Dialogs
+  d3.select('#renamed')
+      .call(modal.updateRenameDialog, state.name)
+    .select(".submit")
+      .on('click', async event => {
+        const newName = modal.renameDialogValue(event.currentTarget);
+        await idb.renameSnapshot(state.sessionID, state.snapshotIndex, newName);
+        state.snapshots[state.snapshotIndex].name = newName;
+        state.updateHeaderCallback();
+      });
+  d3.select('#discardd')
+      .call(modal.updateConfirmDialog,
+            'Are you sure you want to discard changes?')
+    .select(".ok")
+      .on('click', event => {
+        state.updateSnapshot(state.snapshotIndex);
+      });
+  d3.select('#deletesessiond')
+      .call(modal.updateConfirmDialog,
+            'Are you sure you want to delete the session?')
+    .select(".ok")
+      .on('click', async () => {
+        const headers = await idb.getSessionHeaders();
+        if (headers.length == 1) {
+          await idb.clearAll();  // Clear all
+        } else {
+          await idb.deleteSession(state.sessionID);
+          const deleted = await idb.getSessionHeaders();
+          await idb.putConfig("currentSession", deleted.slice(-1)[0].id);
+        }
+        location.reload();
+      });
+  d3.select('#deletesnapshotd')
+      .call(modal.updateConfirmDialog,
+            'Are you sure you want to delete the snapshot?')
+    .select(".ok")
+      .on('click', async () => {
+        await idb.deleteSnapshot(state.sessionID, state.snapshotIndex);
+        location.reload();
+      });
+  d3.select('#deletealld')
+      .call(modal.updateConfirmDialog,
+            'Are you sure you want to delete all local tables and reset the datastore ?')
+    .select(".ok")
+      .on('click', async () => {
+        await idb.clearAll();
+        location.reload();
+      });
+
+  // Resize window
+  window.onresize = () => {
+    const width = d3.select("#frame").property("offsetWidth");
+    const height = d3.select("#frame").property("offsetHeight");
+    state.setViewBox(width, height);
+  }
+
+  // Update all
+  state.updateSnapshotCallback = () => {
+    state.setFocusArea();
+    state.resizeCallback();
+    state.updateHeaderCallback();
+    state.updateControlBoxCallback();
+    state.updateFilter();
+  }
+  // dispatch
+  state.updateSnapshot(state.snapshotIndex);
+}
 
 
 async function run() {
@@ -274,82 +357,6 @@ async function run() {
   const session = await idb.getSession(sessionid);
   const state = new NetworkState(session, width, height);
   setState(state);
-}
-
-
-function setState(state) {
-  // Title
-  d3.select('title').text(state.sessionName);
-
-  // Update contents
-  d3.select('#header')
-      .call(updateHeaderMenu, state);
-  d3.select("#view")
-      .call(component.updateView, state)
-      .call(force.setForce, state)
-      .call(interaction.setInteraction, state);
-  d3.select('#control')
-      .call(control.updateControlBox, state);
-
-  // Dialogs
-  d3.select('#renamed')
-      .call(modal.updateRenameDialog, state.name)
-    .select(".submit")
-      .on('click', async event => {
-        const newName = modal.renameDialogValue(event.currentTarget);
-        await idb.renameSnapshot(state.sessionID, state.snapshotIndex, newName);
-        state.snapshots[state.snapshotIndex].name = newName;
-        state.updateHeaderNotifier();
-      });
-  d3.select('#discardd')
-      .call(modal.updateConfirmDialog,
-            'Are you sure you want to discard changes?')
-    .select(".ok")
-      .on('click', event => {
-        state.applySnapshot(state.snapshotIndex);
-      });
-  d3.select('#deletesessiond')
-      .call(modal.updateConfirmDialog,
-            'Are you sure you want to delete the session?')
-    .select(".ok")
-      .on('click', async () => {
-        const headers = await idb.getSessionHeaders();
-        if (headers.length == 1) {
-          await idb.clearAll();  // Clear all
-        } else {
-          await idb.deleteSession(state.sessionID);
-          const deleted = await idb.getSessionHeaders();
-          await idb.putConfig("currentSession", deleted.slice(-1)[0].id);
-        }
-        location.reload();
-      });
-  d3.select('#deletesnapshotd')
-      .call(modal.updateConfirmDialog,
-            'Are you sure you want to delete the snapshot?')
-    .select(".ok")
-      .on('click', async () => {
-        await idb.deleteSnapshot(state.sessionID, state.snapshotIndex);
-        location.reload();
-      });
-  d3.select('#deletealld')
-      .call(modal.updateConfirmDialog,
-            'Are you sure you want to delete all local tables and reset the datastore ?')
-    .select(".ok")
-      .on('click', async () => {
-        await idb.clearAll();
-        location.reload();
-      });
-
-  // Resize window
-  window.onresize = () => {
-    const width = d3.select("#frame").property("offsetWidth");
-    const height = d3.select("#frame").property("offsetHeight");
-    state.setViewBox(width, height);
-    state.updateViewNotifier();
-  }
-
-  // Update all
-  state.updateAllNotifier();
 }
 
 
