@@ -54,24 +54,20 @@ function selectBoxValueIndex(selection) {
 
 /**
  * Render select box components
- * @param {d3.selection} selection - selection of box container (div element)
+ * @param {＊} selection - selection of box container (div element)
  */
 function checklistBox(selection, label) {
   // TODO: scroll
-  selection
-      .classed('form-group', true)
-      .classed('form-row', true)
-      .classed('align-items-center', true);
   const formLabel = selection.append('label')
       .classed('col-form-label', true)
       .classed('col-form-label-sm', true)
-      .classed('col-4', true)
       .text(label);
   formLabel.append('div')
       .call(badge.invalidFeedback);
   selection.append('ul')
       .classed('form-control', true)
       .classed('form-control-sm', true)
+      .classed('mb-0', true)
       .classed('col-8', true);
 }
 

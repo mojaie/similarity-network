@@ -90,7 +90,7 @@ function unstick(selection, simulation, state) {
 
 
 function setForce(selection, state) {
-  state.updateFilterCallback = () => {
+  state.setForceDispatcher = () => {
     const simulation = forceSimulation(
         state.config.forceParam, state.fieldWidth, state.fieldHeight);
     simulation.nodes(state.fnodes)

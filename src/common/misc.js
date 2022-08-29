@@ -31,6 +31,25 @@ function uuidv4() {
 }
 
 
+function operatorFunction(op) {
+  if (op === ">") {
+    return (a, b) => a > b;
+  } else if (op === ">=") {
+    return (a, b) => a >= b;
+  } else if (op === "<") {
+    return (a, b) => a < b;
+  } else if (op === ">=") {
+    return (a, b) => a <= b;
+  } else if (op === "==") {
+    return (a, b) => a == b;
+  } else if (op === "!=") {
+    return (a, b) => a != b;
+  }
+}
+
+
+
 export default {
-  formatNum, partialMatch, uuidv4
+  formatNum, partialMatch, uuidv4,
+  operatorFunction
 };

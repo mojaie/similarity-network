@@ -23,7 +23,7 @@ import {default as interaction} from './network/interaction.js';
 function sessionMenu(selection) {
   selection
       .classed('row', true)
-      .classed('mb-1', true)
+      .classed('mb-1', true);
   // switch
   selection.append('div')
       .classed('switch', true)
@@ -33,7 +33,7 @@ function sessionMenu(selection) {
       .attr('disabled', true);
 
   const menu = selection.append('div')
-      .classed('col-4', true)
+      .classed('col-4', true);
   // open new file
   menu.append('span')
       .classed('open', true)
@@ -97,16 +97,31 @@ async function updateSessionMenu(selection, state) {
   // delete session
   selection.select('.delete')
       .classed('d-none', state.stateChanged)
-      .on('click', () => {
-        const control = new bootstrap.Modal(document.getElementById("deletesessiond"));
-        control.toggle();
+      .on('click', async () => {
+        const ok = await modal.showConfirmDialog(
+          'Are you sure you want to delete the session?');
+        if (ok) {
+          const headers = await idb.getSessionHeaders();
+          if (headers.length == 1) {
+            await idb.clearAll();  // Clear all
+          } else {
+            await idb.deleteSession(state.sessionID);
+            const deleted = await idb.getSessionHeaders();
+            await idb.putConfig("currentSession", deleted.slice(-1)[0].id);
+          }
+          location.reload();
+        }
       });
   // delete all
   selection.select('.deleteall')
       .classed('d-none', state.stateChanged)
-      .on('click', () => {
-        const control = new bootstrap.Modal(document.getElementById("deletealld"));
-        control.toggle();
+      .on('click', async () => {
+        const ok = await modal.showConfirmDialog(
+          'Are you sure you want to delete all local tables and reset the datastore?');
+        if (ok) {
+          await idb.clearAll();
+          location.reload();
+        }
       });
 }
 
@@ -122,10 +137,10 @@ function snapshotMenu(selection) {
       .classed('col-8', true)
       .call(lbox.selectBox, 'Snapshot')
     .select("select")
-      .attr('disabled', true);;
+      .attr('disabled', true);
 
   const menu = selection.append('div')
-      .classed('col-4', true)
+      .classed('col-4', true);
   // save
   menu.append('span')
       .classed('save', true)
@@ -146,7 +161,6 @@ function snapshotMenu(selection) {
       .classed('delete', true)
       .classed('d-none', true)
       .call(button.menuIcon, 'Delete', 'delete-gray');
-  
 }
 
 
@@ -176,23 +190,35 @@ function updateSnapshotMenu(selection, state) {
   // discard change
   selection.select('.discard')
       .classed('d-none', !state.stateChanged || state.snapshots.length == 0)
-      .on('click', function () {
-        const control = new bootstrap.Modal(document.getElementById("discardd"));
-        control.toggle();
+      .on('click', async () => {
+        const ok = await modal.showConfirmDialog(
+          'Are you sure you want to discard changes?');
+        if (ok) {
+          state.updateSnapshot(state.snapshotIndex);
+        }
       });
   // rename
   selection.select('.rename')
       .classed('d-none', state.stateChanged)
-      .on('click', function () {
-        const control = new bootstrap.Modal(document.getElementById("renamed"));
-        control.toggle();
+      .on('click', async () => {
+        const newName = await modal.showRenameDialog(state.name);
+        if (newName) {
+          await idb.renameSnapshot(state.sessionID, state.snapshotIndex, newName);
+          state.snapshots[state.snapshotIndex].name = newName;
+          state.name = newName;
+          state.updateHeaderCallback();
+        }
       });
   // delete
   selection.select('.delete')
       .classed('d-none', state.stateChanged)
-      .on('click', function () {
-        const control = new bootstrap.Modal(document.getElementById("deletesnapshotd"));
-        control.toggle();
+      .on('click', async () => {
+        const ok = await modal.showConfirmDialog(
+          'Are you sure you want to delete the snapshot?');
+        if (ok) {
+          await idb.deleteSnapshot(state.sessionID, state.snapshotIndex);
+          location.reload();
+        }
       });
 }
 
@@ -212,9 +238,6 @@ function updateHeaderMenu(selection, state) {
       .call(updateSessionMenu, state);
   selection.select("#header-snapshot")
       .call(updateSnapshotMenu, state);
-  // dialog
-  d3.select('#renamed')
-      .call(modal.updateRenameDialog, state.name)
 
   state.updateHeaderCallback = () => {
     selection.call(updateHeaderMenu, state);
@@ -245,60 +268,13 @@ function setState(data) {
   d3.select('#control')
       .call(control.updateControlBox, state);
 
-  // Dialogs
-  d3.select('#renamed')
-      .on('submit', async event => {
-        const newName = modal.renameDialogValue(d3.select(event.currentTarget));
-        await idb.renameSnapshot(state.sessionID, state.snapshotIndex, newName);
-        state.snapshots[state.snapshotIndex].name = newName;
-        state.name = newName;
-        state.updateHeaderCallback();
-      });
-  d3.select('#discardd')
-      .call(modal.updateConfirmDialog,
-            'Are you sure you want to discard changes?')
-    .select(".ok")
-      .on('click', event => {
-        state.updateSnapshot(state.snapshotIndex);
-      });
-  d3.select('#deletesessiond')
-      .call(modal.updateConfirmDialog,
-            'Are you sure you want to delete the session?')
-    .select(".ok")
-      .on('click', async () => {
-        const headers = await idb.getSessionHeaders();
-        if (headers.length == 1) {
-          await idb.clearAll();  // Clear all
-        } else {
-          await idb.deleteSession(state.sessionID);
-          const deleted = await idb.getSessionHeaders();
-          await idb.putConfig("currentSession", deleted.slice(-1)[0].id);
-        }
-        location.reload();
-      });
-  d3.select('#deletesnapshotd')
-      .call(modal.updateConfirmDialog,
-            'Are you sure you want to delete the snapshot?')
-    .select(".ok")
-      .on('click', async () => {
-        await idb.deleteSnapshot(state.sessionID, state.snapshotIndex);
-        location.reload();
-      });
-  d3.select('#deletealld')
-      .call(modal.updateConfirmDialog,
-            'Are you sure you want to delete all local tables and reset the datastore ?')
-    .select(".ok")
-      .on('click', async () => {
-        await idb.clearAll();
-        location.reload();
-      });
-
   // Resize window
   window.onresize = () => {
     const width = d3.select("#frame").property("offsetWidth");
     const height = d3.select("#frame").property("offsetHeight");
     state.setViewBox(width, height);
   }
+
   // Update all
   state.updateSnapshotCallback = () => {
     state.setFocusArea();
@@ -337,16 +313,7 @@ async function run() {
       .attr("id", "renamed")
       .call(modal.renameDialog);
   dialogs.append('div')
-      .attr("id", "discardd")
-      .call(modal.confirmDialog);
-  dialogs.append('div')
-      .attr("id", "deletesessiond")
-      .call(modal.confirmDialog);
-  dialogs.append('div')
-      .attr("id", "deletesnapshotd")
-      .call(modal.confirmDialog);
-  dialogs.append('div')
-      .attr("id", "deletealld")
+      .attr("id", "confirmd")
       .call(modal.confirmDialog);
 
   const sessionid = await idb.getConfig("currentSession");

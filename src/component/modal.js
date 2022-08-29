@@ -36,19 +36,40 @@ function confirmDialog(selection) {
       .classed('cancel', true)
       .attr('type', 'button')
       .attr('data-bs-dismiss', 'modal')
-      .text('Cancel');
+      .text('Cancel')
+      .on('click', event => {
+        selection.dispatch('cancel');
+      });
   footer.append('button')
       .classed('btn', true)
       .classed('btn-primary', true)
       .classed('ok', true)
       .attr('type', 'button')
       .attr('data-bs-dismiss', 'modal')
-      .text('OK');
+      .text('OK')
+      .on('click', event => {
+        selection.dispatch('submit');
+      });
+  // custom backdrop
+  selection
+      .on('click', event => {
+        // do not trigger when the child elements are clicked
+        if (event.currentTarget !== event.target) { return; }
+        selection.dispatch('cancel');
+      });
 }
 
 
-function updateConfirmDialog(selection, message) {
+async function showConfirmDialog(message, selector="confirmd") {
+  const selection = d3.select(`#${selector}`);
   selection.select('.message').text(message);
+  const control = new bootstrap.Modal(document.getElementById(selector));
+  control.toggle();
+  return new Promise(resolve => {
+    selection
+        .on('submit', () => resolve(true))
+        .on("cancel", () => resolve(false));
+  });
 }
 
 
@@ -77,18 +98,27 @@ function submitDialog(selection, title) {
       .classed('btn-secondary', true)
       .attr('type', 'button')
       .attr('data-bs-dismiss', "modal")
-      .text('Cancel');
+      .text('Cancel')
+      .on('click', event => {
+        selection.dispatch('cancel');
+      });
   footer.append('button')
       .classed('btn', true)
       .classed('btn-primary', true)
       .attr('type', 'button')
       .attr('data-bs-dismiss', 'modal')
       .text('Save changes')
-      .on('click', () => {
+      .on('click', event => {
         selection.dispatch('submit');
       });
+  // custom backdrop
+  selection
+      .on('click', event => {
+        // do not trigger when the child elements are clicked
+        if (event.currentTarget !== event.target) { return; }
+        selection.dispatch('cancel');
+      });
 }
-
 
 
 function renameDialog(selection) {
@@ -103,17 +133,26 @@ function renameDialog(selection) {
 }
 
 
-function updateRenameDialog(selection, name) {
-  selection.select('.name').call(box.updateFormValue, name);
-}
-
-
-function renameDialogValue(selection) {
-  return box.formValue(selection.select('.name'));
+async function showRenameDialog(name, selector="renamed") {
+  const selection = d3.select(`#${selector}`);
+  selection.select('.name')
+      .call(box.updateFormValue, name);
+  const control = new bootstrap.Modal(document.getElementById(selector));
+  control.toggle();
+  return new Promise(resolve => {
+    selection
+        .on('submit', event => {
+          const value = box.formValue(selection.select('.name'));
+          resolve(value);
+        })
+        .on("cancel", event => {
+          resolve(false);
+        });
+        
+  });
 }
 
 
 export default {
-  confirmDialog, updateConfirmDialog, submitDialog,
-  renameDialog, updateRenameDialog, renameDialogValue
+  confirmDialog, showConfirmDialog, renameDialog, showRenameDialog
 };

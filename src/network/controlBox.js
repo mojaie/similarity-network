@@ -4,12 +4,13 @@
 import d3 from 'd3';
 
 import {default as misc} from '../common/misc.js';
-import {default as cscale} from '../common/scale.js';
+import scale from '../common/scale.js';
 
 import {default as badge} from '../component/badge.js';
 import {default as box} from '../component/formBox.js';
 import {default as lbox} from '../component/formListBox.js';
 import {default as button} from '../component/button.js';
+import modal from '../component/modal.js';
 
 import {default as force} from './force.js';
 
@@ -109,38 +110,146 @@ function updateLayoutControl(selection, state) {
         state.restartDispatcher();
       });
   // TODO: random
-
 }
 
 
 
-/*
-- filter
-  - add filter: button
-  - remove filter: button
-  - numeric
-    - key: select
-    - value: numeric
-    - condition: select
-  - nominal
-    - key: checkboxlist
-    - select/deselect all
-*/
 
 function FilterControlBox(selection) {
-  // New filter
+  // buttons
   selection.append('div')
-      .classed('mb-3', true)
-      .classed('newfilter', true)
-      .call(button.buttonBox, '+ New filter', 'outline-primary');
+      .classed('new', true)
+      .call(button.buttonBox, '+ New filter', 'outline-primary')
+      .select("button")
+      .classed('mb-2', true);
   // filters
   selection.append('div')
-      .classed('mb-3', true)
       .classed('filter-container', true);
 }
 
 function updateFilterControl(selection, state) {
+  // TODO
+  let groups = [];
+  if (state.fieldTypeMap[state.nodeFields[0]] === "categorical") {
+    const counter = {};
+    state.nodes.forEach(e => {
+      if (!counter.hasOwnProperty(e[state.nodeFields[0]])) {
+        counter[e[state.nodeFields[0]]] = 0;
+      }
+      counter[e[state.nodeFields[0]]] += 1;
+    })
+    const entries = Object.entries(counter);
+    entries.sort(((a, b) => a[1] - b[1]))
+    groups = entries.slice(0, 20).map(e => e[0]);
+  }
 
+  selection.select('.new')
+      .on('click', () => {
+        state.filters.push({
+          field: `node.${state.nodeFields[0]}`,
+          operator: ">",
+          value: 0,
+          groups: groups
+        });
+        state.stateChanged = true;
+        state.updateFilter();
+      });
+  const container = selection.select(".filter-container")
+  container.selectAll('.filter').remove();
+  if (state.filters.length === 0) { return; }
+  container.selectAll('.filter')
+    .data(state.filters).enter()
+    .append("div")
+      .classed("filter", true)
+    .each((d, i, nodes) => {
+      d3.select(nodes[i])
+        .call(filterComponent, d, i, state)
+        .on('change', event => {
+          state.filters[i] = filterValue(d3.select(event.currentTarget));
+          state.stateChanged = true;
+          state.updateFilter();
+        })
+        .on('remove', async event => {
+          const ok = await modal.showConfirmDialog(
+            'Are you sure you want to delete the filter?');
+          if (ok) {
+            state.filters.splice(i, 1);
+            state.stateChanged = true;
+            state.updateFilter();
+          }
+        });
+      });
+}
+
+
+function filterComponent(selection, d, i, state) {
+  const nodeFields = state.nodeFields.map(e => `node.${e}`);
+  const edgeFields = state.edgeFields.map(e => `edge.${e}`);
+  const fieldOptions = nodeFields.concat(edgeFields);
+  selection
+      .classed("card", true)
+      .classed("mb-2", true);
+  const header = selection.append("div")
+      .classed("card-header", true)
+      .classed("d-flex", true)
+      .classed("py-1", true)
+      .text(d.name || `Filter ${i + 1}`);
+  header.append("button")
+      .classed("btn-close", true)
+      .classed("ms-auto", true)
+      .classed("remove", true)
+      .attr("type", "button")
+      .attr('aria-label', 'Close')
+      .on('click', event => {
+        selection.dispatch('remove');
+      });
+  const body = selection.append("div")
+      .classed("card-body", true)
+      .classed("p-2", true);
+  // field
+  body.append("div")
+      .classed("field", true)
+      .classed("mb-1", true)
+      .call(lbox.selectBox, "Field")
+      .call(lbox.updateSelectBoxOptions, fieldOptions)
+      .call(lbox.updateSelectBoxValue, d.field);
+  // numeric: condition and value
+  body.append("div")
+      .classed("operator", true)
+      .classed("mb-1", true)
+      .classed("d-none", state.fieldTypeMap[d.field] === "categorical")
+      .call(lbox.selectBox, "Operator")
+      .call(lbox.updateSelectBoxOptions, [">", ">=", "<", "<=", "==", "!="])
+      .call(lbox.updateSelectBoxValue, d.operator);
+  body.append("div")
+      .classed("value", true)
+      .classed("mb-1", true)
+      .classed("d-none", state.fieldTypeMap[d.field] === "categorical")
+      .attr('required', 'required')
+      .call(box.numberBox, "Value")
+      .call(box.updateNumberRange, null, null, "any")
+      .call(badge.updateInvalidMessage, 'Please provide a valid number')
+      .call(box.updateFormValue, d.value)
+    .select('.form-control')
+      .attr('required', 'required');
+  // categorical: checklistBox (top 20)
+  body.append("div")
+      .classed("selected", true)
+      .classed("mb-1", true)
+      .classed("mx-0", true)
+      .classed("d-none", state.fieldTypeMap[d.field] === "numeric")
+      .call(lbox.checklistBox, "Groups")
+      .call(lbox.updateChecklistValues, d.groups);
+}
+
+
+function filterValue(selection) {
+  return {
+    field: lbox.selectBoxValue(selection.select(".field")),
+    operator: lbox.selectBoxValue(selection.select(".operator")),
+    value: box.formValue(selection.select(".value")),
+    groups: lbox.checklistValues(selection.select(".groups"))
+  }
 }
 
 
@@ -165,7 +274,7 @@ function NodeControlBox(selection) {
       .classed('ms-3', true)
       .classed('gx-0', true)
       .call(lbox.colorScaleBox, 'Range')
-      .call(lbox.updateColorScaleItems, Object.keys(cscale.scales.color));
+      .call(lbox.updateColorScaleItems, Object.keys(scale.scales.color));
   // Color scale type
   selection.append('div')
       .classed('colorscale', true)
@@ -173,7 +282,7 @@ function NodeControlBox(selection) {
       .classed('ms-3', true)
       .classed('gx-0', true)
       .call(lbox.selectBox, 'Scale')
-      .call(lbox.updateSelectBoxOptions, Object.keys(cscale.types));
+      .call(lbox.updateSelectBoxOptions, Object.keys(scale.types));
 
   // Node size
   selection.append('div')
@@ -194,7 +303,7 @@ function NodeControlBox(selection) {
       .classed('ms-3', true)
       .classed('gx-0', true)
       .call(lbox.selectBox, 'Range')
-      .call(lbox.updateSelectBoxOptions, Object.keys(cscale.scales.nodeSize));
+      .call(lbox.updateSelectBoxOptions, Object.keys(scale.scales.nodeSize));
   // Size scale type
   selection.append('div')
       .classed('sizescale', true)
@@ -202,7 +311,7 @@ function NodeControlBox(selection) {
       .classed('ms-3', true)
       .classed('gx-0', true)
       .call(lbox.selectBox, 'Scale')
-      .call(lbox.updateSelectBoxOptions, Object.keys(cscale.types))
+      .call(lbox.updateSelectBoxOptions, Object.keys(scale.types))
 
   // Node label
   selection.append('div')
@@ -338,7 +447,7 @@ function EdgeControlBox(selection) {
       .classed('ms-3', true)
       .classed('gx-0', true)
       .call(lbox.colorScaleBox, 'Range')
-      .call(lbox.updateColorScaleItems, Object.keys(cscale.scales.color));
+      .call(lbox.updateColorScaleItems, Object.keys(scale.scales.color));
   // Color scale type
   selection.append('div')
       .classed('colorscale', true)
@@ -346,7 +455,7 @@ function EdgeControlBox(selection) {
       .classed('ms-3', true)
       .classed('gx-0', true)
       .call(lbox.selectBox, 'Scale')
-      .call(lbox.updateSelectBoxOptions, Object.keys(cscale.types));
+      .call(lbox.updateSelectBoxOptions, Object.keys(scale.types));
 
   // Edge width
   selection.append('div')
@@ -367,7 +476,7 @@ function EdgeControlBox(selection) {
       .classed('ms-3', true)
       .classed('gx-0', true)
       .call(lbox.selectBox, 'Range')
-      .call(lbox.updateSelectBoxOptions, Object.keys(cscale.scales.edgeWidth));
+      .call(lbox.updateSelectBoxOptions, Object.keys(scale.scales.edgeWidth));
   // Width scale type
   selection.append('div')
       .classed('widthscale', true)
@@ -375,7 +484,7 @@ function EdgeControlBox(selection) {
       .classed('ms-3', true)
       .classed('gx-0', true)
       .call(lbox.selectBox, 'Scale')
-      .call(lbox.updateSelectBoxOptions, Object.keys(cscale.types))
+      .call(lbox.updateSelectBoxOptions, Object.keys(scale.types))
 
   // Edge label
   selection.append('div')

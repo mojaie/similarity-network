@@ -3,7 +3,8 @@
 
 import TransformState from  '../common/transform.js';
 
-import {default as scale} from '../common/scale.js';
+import misc from '../common/misc.js';
+import scale from '../common/scale.js';
 
 
 export default class NetworkState extends TransformState {
@@ -21,6 +22,9 @@ export default class NetworkState extends TransformState {
     this.nodeDomains = this.nodeFields.map(e => {
       return scale.autoDomain(this.nodes.map(n => n[e]));
     });
+    this.nodeTypes = this.nodeDomains.map(e => {
+      return e === null ? "categorical" : "numeric";
+    });
     this.nodes.forEach((e, i) => {
       e.__index = i;  // internal id for d3.force
       e.__selected = false;  // for multiple selection
@@ -34,6 +38,9 @@ export default class NetworkState extends TransformState {
     this.edgeDomains = this.edgeFields.map(e => {
       return scale.autoDomain(this.edges.map(n => n[e]));
     });
+    this.edgeTypes = this.edgeDomains.map(e => {
+      return e === null ? "categorical" : "numeric";
+    });
     this.edges.forEach((e, i) => {
       // internal id for d3.force
       e.__source = e.source;
@@ -41,6 +48,14 @@ export default class NetworkState extends TransformState {
       e.__index = i;
     })
 
+    // For filter fields
+    this.fieldTypeMap = {}
+    this.nodeFields.forEach((e, i) => {
+      this.fieldTypeMap[`node.${e}`] = this.nodeTypes[i];
+    })
+    this.edgeFields.forEach((e, i) => {
+      this.fieldTypeMap[`edge.${e}`] = this.edgeTypes[i];
+    })
 
     // filtered elements
     this.fnodes = [];
@@ -85,7 +100,10 @@ export default class NetworkState extends TransformState {
     // update component visibility and events when vnodes/vedges changed
     this.updateVisibilityCallback = () => {};
     // update component filters and forces when fnodes/fedges changed
-    this.updateFilterCallback = () => {};
+    this.updateFilterCallback = () => {
+      this.setForceDispatcher();
+      this.updateControlBoxCallback();
+    };
     // update all when snapshot changed
     this.updateSnapshotCallback = () => {};
 
@@ -181,23 +199,33 @@ export default class NetworkState extends TransformState {
   updateFilter() {
     // fnodes and fedges used for force layout
     // called by filter
-
-    // TODO: apply filters
-    /*
-    this.snapshot.filters.forEach(filter => {
-      const component = filter.type == "edge" ? this.session.edges : this.session.nodes;
-      const workingCopy = filter.type == "edge" ? this.edges : this.nodes;
-      component.filter(e => {
-        if (filter.scale == "nominal") {
-          filter.key
-        } else {
-
-        }
-      });
-    });
-    */
     this.fnodes = this.nodes;
     this.fedges = this.edges;
+    this.filters.forEach(cond => {
+      const isNode = cond.field.startsWith("node.");
+      const field = cond.field.substring(5);
+      const type = this.fieldTypeMap[cond.field];
+      if (isNode) {
+        if (type === "numeric") {
+          this.fnodes = this.fnodes.filter(
+            e => misc.operatorFunction(cond.operator)(e[field], cond.value));
+        } else if (type === "categorical") {
+          this.fnodes = this.fnodes.filter(e => cond.groups.includes(e[field]));
+        }
+        // node-induced subgraph edges
+        const fn = new Set(this.fnodes.map(e => e.__index));
+        this.fedges = this.fedges.filter(e => {
+          return fn.has(e.__source) && fn.has(e.__target);
+        });
+      } else { // edge
+        if (type === "numeric") {
+          this.fedges = this.fedges.filter(
+            e => misc.operatorFunction(cond.operator)(e[field], cond.value));
+        } else if (type === "categorical") {
+          this.fedges = this.fedges.filter(e => cond.groups.includes(e[field]));
+        }
+      }
+    });
     this.updateFilterCallback();
     this.zoomCallback();
     this.updateVisibility();
@@ -256,6 +284,7 @@ export default class NetworkState extends TransformState {
       return e.y > this.focusArea.top && e.x > this.focusArea.left
         && e.y < this.focusArea.bottom && e.x < this.focusArea.right;
     });
+    // all incidences to the filtered nodes
     const vn = new Set(this.vnodes.map(e => e.__index));
     this.vedges = this.fedges.filter(e => {
       return vn.has(e.__source) || vn.has(e.__target);
