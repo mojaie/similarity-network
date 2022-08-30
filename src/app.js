@@ -280,8 +280,8 @@ function setState(data) {
     state.setFocusArea();
     state.resizeCallback();
     state.updateHeaderCallback();
-    state.updateControlBoxCallback();
     state.updateFilter();
+    state.updateControlBoxCallback();
   }
   // dispatch
   state.updateSnapshot(state.snapshotIndex);

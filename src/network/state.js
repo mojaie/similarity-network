@@ -15,46 +15,27 @@ export default class NetworkState extends TransformState {
     this.sessionID = session.id;
 
     this.nodes = session.nodes;
+    this.edges = session.edges;
+
+    // Fields
     this.nodeFields = [...this.nodes.reduce((a, b) => {
       Object.keys(b).forEach(e => { a.add(e); })
       return a;
     }, new Set())]  // unique keys
-    this.nodeDomains = this.nodeFields.map(e => {
-      return scale.autoDomain(this.nodes.map(n => n[e]));
-    });
-    this.nodeTypes = this.nodeDomains.map(e => {
-      return e === null ? "categorical" : "numeric";
-    });
-    this.nodes.forEach((e, i) => {
-      e.__index = i;  // internal id for d3.force
-      e.__selected = false;  // for multiple selection
-    })
-
-    this.edges = session.edges;
     this.edgeFields = [...this.edges.reduce((a, b) => {
       Object.keys(b).forEach(e => { a.add(e); })
       return a;
     }, new Set())]  // unique keys
-    this.edgeDomains = this.edgeFields.map(e => {
-      return scale.autoDomain(this.edges.map(n => n[e]));
-    });
-    this.edgeTypes = this.edgeDomains.map(e => {
-      return e === null ? "categorical" : "numeric";
-    });
+
+    // set internal attrs for d3.force
+    this.nodes.forEach((e, i) => {
+      e.__index = i;  // internal id for d3.force
+      e.__selected = false;  // for multiple selection
+    })
     this.edges.forEach((e, i) => {
-      // internal id for d3.force
       e.__source = e.source;
       e.__target = e.target;
       e.__index = i;
-    })
-
-    // For filter fields
-    this.fieldTypeMap = {}
-    this.nodeFields.forEach((e, i) => {
-      this.fieldTypeMap[`node.${e}`] = this.nodeTypes[i];
-    })
-    this.edgeFields.forEach((e, i) => {
-      this.fieldTypeMap[`edge.${e}`] = this.edgeTypes[i];
     })
 
     // filtered elements
@@ -64,6 +45,17 @@ export default class NetworkState extends TransformState {
     // visible elements
     this.vnodes = [];
     this.vedges = [];
+
+    // Field types
+    this.imageNodeFields = [];
+    this.numericNodeFields = [];
+    this.categoricalNodeFields = [];
+    this.numericEdgeFields = [];
+    this.categoricalEdgeFields = [];
+
+    // for domain calculation
+    this.nodeIQR = {};
+    this.edgeIQR = {};
 
     // States
     this.showNodeImage = false;
@@ -122,37 +114,23 @@ export default class NetworkState extends TransformState {
     this.name = "default";
     this.filters = [];
     this.config = {
-      showNodeImageThreshold: 100,
+      numericFields: [],
+      categoricalFields: [],
+      imageFields: [],
+      showNodeImageThreshold: 200,
       alwaysShowNodeImage: false,
-      showEdgeThreshold: 500,
+      showEdgeThreshold: 1000,
       alwaysShowEdge: false,
-      legendOrient: 'none',
-      showEdgeLegend: 'none',
       forceParam: 'dense'
     };
     this.appearance = {
-      nodeColor: {
-        field: this.nodeFields[0], rangePreset: 'default',
-        scale: 'log', domain: [1e-6, 1e-9]
-      },
-      nodeSize: {
-        field: this.nodeFields[0], rangePreset: 'medium',
-        scale: 'linear', domain: [1, 1]
-      },
-      nodeLabel: {
-        field: this.nodeFields[0], size: 20, visible: false
-      },
-      edgeColor: {
-        field: this.edgeFields[0], rangePreset: 'monogray',
-        scale: 'linear', domain: [0, 1]
-      },
-      edgeWidth: {
-        field: this.edgeFields[0], rangePreset: 'medium',
-        scale: 'linear', domain: [0.5, 1]
-      },
-      edgeLabel: {
-        field: this.edgeFields[0], size: 12, visible: false
-      }
+      nodeColor: {rangePreset: 'green', scale: 'constant'},
+      nodeSize: {rangePreset: 'medium', scale: 'constant'},
+      nodeLabel: {size: 20, visible: false},
+      nodeImage: {size: 180},
+      edgeColor: {rangePreset: 'gray', scale: 'constant'},
+      edgeWidth: {rangePreset: 'medium', scale: 'constant'},
+      edgeLabel: {size: 12, visible: false}
     };
     this.snapshots = session.snapshots || [];
     this.snapshotIndex = this.snapshots.length - 1;
@@ -197,19 +175,30 @@ export default class NetworkState extends TransformState {
    * update this.nodes and this.edges used by d3.force
    */
   updateFilter() {
-    // fnodes and fedges used for force layout
-    // called by filter
+    // fnodes and fedges that are enabled and used for force layout
+    // called by filterControlBox
+
+    // default, no filter applied
     this.fnodes = this.nodes;
     this.fedges = this.edges;
+
+    // update field types
+    this.imageNodeFields = this.nodeFields.filter(e => scale.fieldType(e, this.config) === "image");
+    this.numericNodeFields = this.nodeFields.filter(e => scale.fieldType(e, this.config) === "numeric");
+    this.categoricalNodeFields = this.nodeFields.filter(e => scale.fieldType(e, this.config) === "categorical");
+    this.numericEdgeFields = this.edgeFields.filter(e => scale.fieldType(e, this.config) === "numeric");
+    this.categoricalEdgeFields = this.edgeFields.filter(e => scale.fieldType(e, this.config) === "categorical");
+
     this.filters.forEach(cond => {
       const isNode = cond.field.startsWith("node.");
       const field = cond.field.substring(5);
-      const type = this.fieldTypeMap[cond.field];
+      const isNum = this.numericNodeFields.includes(field) || this.numericEdgeFields.includes(field);
+      const isCat = this.categoricalNodeFields.includes(field) || this.categoricalEdgeFields.includes(field);
       if (isNode) {
-        if (type === "numeric") {
+        if (isNum) {
           this.fnodes = this.fnodes.filter(
             e => misc.operatorFunction(cond.operator)(e[field], cond.value));
-        } else if (type === "categorical") {
+        } else if (isCat) {
           this.fnodes = this.fnodes.filter(e => cond.groups.includes(e[field]));
         }
         // node-induced subgraph edges
@@ -218,14 +207,23 @@ export default class NetworkState extends TransformState {
           return fn.has(e.__source) && fn.has(e.__target);
         });
       } else { // edge
-        if (type === "numeric") {
+        if (isNum) {
           this.fedges = this.fedges.filter(
             e => misc.operatorFunction(cond.operator)(e[field], cond.value));
-        } else if (type === "categorical") {
+        } else if (isCat) {
           this.fedges = this.fedges.filter(e => cond.groups.includes(e[field]));
         }
       }
     });
+
+    // update IQR
+    this.numericNodeFields.forEach(e => {
+      this.nodeIQR[e] = scale.IQR(this.fnodes.map(n => n[e]));
+    });
+    this.numericEdgeFields.forEach(e => {
+      this.edgeIQR[e] = scale.IQR(this.fedges.map(n => n[e]));
+    });
+
     this.updateFilterCallback();
     this.zoomCallback();
     this.updateVisibility();
@@ -289,7 +287,16 @@ export default class NetworkState extends TransformState {
     this.vedges = this.fedges.filter(e => {
       return vn.has(e.__source) || vn.has(e.__target);
     });
-    //console.log(JSON.parse(JSON.stringify(this.vnodes)))
+
+    // suppress node image rendering
+    const ncnt = this.vnodes.length;
+    this.showNodeImage = ncnt < this.config.showNodeImageThreshold || this.config.alwaysShowNodeImage;
+    // suppress edge rendering
+    const ecnt = this.vedges.length;
+    if (ecnt > this.config.showEdgeThreshold && !this.config.alwaysShowEdge) {
+      this.vedges = [];
+    }
+
     this.updateVisibilityCallback();
     this.updateMenuButtonCallback();
   }

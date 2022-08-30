@@ -48,8 +48,23 @@ function operatorFunction(op) {
 }
 
 
+function rank(arr, thld=50) {
+  const counter = {};
+  // count elements
+  arr.forEach(e => {
+    if (!counter.hasOwnProperty(e)) {
+      counter[e] = 0;
+    }
+    counter[e] += 1;
+  })
+  // sort by frequency
+  const entries = Object.entries(counter);
+  entries.sort(((a, b) => a[1] - b[1]));
+  return entries.slice(0, thld);
+}
+
 
 export default {
   formatNum, partialMatch, uuidv4,
-  operatorFunction
+  operatorFunction, rank
 };

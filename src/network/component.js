@@ -9,11 +9,7 @@ import {default as misc} from '../common/misc.js';
 import {default as legend} from '../component/legend.js';
 
 
-const svgWidth = 180;  //TODO
-const svgHeight = 180;  //TODO
-
-
-function updateNodes(selection, records, showStruct) {
+function updateNodes(selection, records) {
   const nodes = selection.selectAll('.node')
     .data(records, d => d.__index);
   nodes.exit().remove();
@@ -23,18 +19,12 @@ function updateNodes(selection, records, showStruct) {
   entered.append('circle')
       .attr('class', 'node-symbol');
   entered.append('g')
-      .attr('class', 'node-image')
-      .attr('transform', `translate(${-svgWidth / 2},${-svgHeight / 2})`);
+      .attr('class', 'node-image');
   entered.append('foreignObject')
       .attr('class', 'node-html')
     .append('xhtml:div');
   const merged = entered.merge(nodes)
       .call(updateNodeCoords);
-  if (showStruct) {
-    merged.select('.node-image').html(d => d.structure);
-  } else {
-    merged.select('.node-image').select('svg').remove();
-  }
 }
 
 
@@ -57,40 +47,55 @@ function updateEdges(selection, records) {
 
 
 function updateNodeAttrs(selection, state) {
-  const colorScaleFunc = scale.scaleFunction(state.appearance.nodeColor, "color");
-  const sizeScaleFunc = scale.scaleFunction(state.appearance.nodeSize, "nodeSize");
   const colorField = state.appearance.nodeColor.field;
   const sizeField = state.appearance.nodeSize.field;
   const labelField = state.appearance.nodeLabel.field;
   const labelSize = state.appearance.nodeLabel.size;
   const labelVisible = state.appearance.nodeLabel.visible;
+  const svgWidth = state.appearance.nodeImage.size;
+  const svgHeight = state.appearance.nodeImage.size;
+  const colorScaleFunc = scale.scaleFunction(
+    state.appearance.nodeColor, state.nodeIQR[colorField], "color");
+  const sizeScaleFunc = scale.scaleFunction(
+    state.appearance.nodeSize, state.nodeIQR[sizeField], "size");
   selection.selectAll('.node').select('.node-symbol')
       .attr('r', d => sizeScaleFunc(d[sizeField]))
       .style('fill', d => colorScaleFunc(d[colorField]));
   const htwidth = 200;
+
   const fo = selection.selectAll('.node').select('.node-html');
   fo.attr('x', -htwidth / 2)
-    .attr('y', d => state.showNodeImage ? svgWidth / 2 - 10 : sizeScaleFunc(d[sizeField]))
-    .attr('width', htwidth)
-    .attr('height', 1)
-    .attr('overflow', 'visible');
+      .attr('y', d => state.showNodeImage ? svgWidth / 2 - 10 : sizeScaleFunc(d[sizeField]))
+      .attr('width', htwidth)
+      .attr('height', 1)
+      .attr('overflow', 'visible');
   fo.select('div')
-    .style('font-size', `${labelSize}px`)
-    .style('color', d => d.labelColor || "#cccccc")
-    .style('text-align', 'center')
-    .style('display', labelVisible ? 'block' : 'none')
-    .html(d => d[labelField]);
+      .style('font-size', `${labelSize}px`)
+      .style('color', d => d.labelColor || "#cccccc")
+      .style('text-align', 'center')
+      .style('display', labelVisible ? 'block' : 'none')
+      .html(d => d[labelField]);
+
+  const image = selection.selectAll('.node').select('.node-image')
+      .attr('transform', `translate(${-svgWidth / 2},${-svgHeight / 2})`)
+    if (state.showNodeImage) {
+      image.html(d => d[state.appearance.nodeImage.field]);
+    } else {
+      image.select('svg').remove();
+    }
 }
 
 
 function updateEdgeAttrs(selection, state) {
-  const colorScaleFunc = scale.scaleFunction(state.appearance.edgeColor, "color");
-  const widthScaleFunc = scale.scaleFunction(state.appearance.edgeWidth, "edgeWidth");
   const colorField = state.appearance.edgeColor.field;
   const widthField = state.appearance.edgeWidth.field;
   const labelField = state.appearance.edgeLabel.field;
   const labelSize = state.appearance.edgeLabel.size;
   const labelVisible = state.appearance.edgeLabel.visible;
+  const colorScaleFunc = scale.scaleFunction(
+    state.appearance.edgeColor, state.edgeIQR[colorField], "color");
+  const widthScaleFunc = scale.scaleFunction(
+    state.appearance.edgeWidth, state.edgeIQR[widthField], "width");
   selection.selectAll('.link').select('.edge-line')
     .style('stroke', d => colorScaleFunc(d[colorField]))
     .style('stroke-width', d => widthScaleFunc(d[widthField]));
@@ -130,7 +135,7 @@ function updateNodeSelection(selection) {
 
 function updateComponents(selection, state) {
   selection.select('.node-layer')
-    .call(updateNodes, state.vnodes, false)
+    .call(updateNodes, state.vnodes)
     .call(updateNodeAttrs, state);
   selection.select('.edge-layer')
     .call(updateEdges, state.vedges)
@@ -164,12 +169,6 @@ function viewComponent(selection) {
       .style('opacity', 1);
   field.append('g').classed('edge-layer', true);
   field.append('g').classed('node-layer', true);
-
-  selection.append('g')
-      .classed('legends', true)
-    .append('g')
-      .classed('nodecolor', true)
-      .call(legend.colorBarLegend);
 }
 
 

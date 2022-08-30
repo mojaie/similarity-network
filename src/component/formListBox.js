@@ -27,7 +27,7 @@ function selectBox(selection, label) {
       .classed('form-select-sm', true);
 }
 
-function updateSelectBoxOptions(selection, items, keyfunc = d => d, namefunc = d => d) {
+function updateSelectBoxOptions(selection, items, keyfunc=d => d, namefunc=d => d, init=false) {
   const options = selection.select('select')
     .selectAll('option')
       .data(items, keyfunc);
@@ -37,6 +37,14 @@ function updateSelectBoxOptions(selection, items, keyfunc = d => d, namefunc = d
       .attr('value', keyfunc)
     .merge(options)
       .text(namefunc);
+  if (init) {
+    selection.select('select')
+      .append("option")
+        .property("disabled", true)
+        .property("selected", true)
+        .property("value", true)
+        .text("--- select ---");
+  }
 }
 
 function updateSelectBoxValue(selection, value) {
@@ -71,7 +79,7 @@ function checklistBox(selection, label) {
       .classed('col-8', true);
 }
 
-function updateChecklistItems(selection, items) {
+function updateChecklistItems(selection, items, keyfunc = d => d, namefunc = d => d) {
   const listitems = selection.select('ul')
     .selectAll('li')
       .data(items, d => d.key);
@@ -84,9 +92,9 @@ function updateChecklistItems(selection, items) {
   form.append('input')
       .attr('type', 'checkbox')
       .attr('class', 'form-check-input')
-      .property('value', d => d.key);
+      .property('value', keyfunc);
   form.append('span')
-      .text(d => d.name);
+      .text(namefunc);
 }
 
 function checkRequired(selection) {
@@ -97,16 +105,16 @@ function checkRequired(selection) {
       });
 }
 
-function updateChecklistValues(selection, values) {
+function updateChecklistValues(selection, values, keyfunc = d => d) {
   selection.selectAll('input')
     .each(function (d) {
-      d3.select(this).property('checked', values.includes(d.key));
+      d3.select(this).property('checked', values.includes(keyfunc(d)));
     });
   selection.call(setChecklistValidity, true);  // Clear validity state
 }
 
-function checklistValues(selection) {
-  return selection.selectAll('input:checked').data().map(d => d.key);
+function checklistValues(selection, keyfunc = d => d) {
+  return selection.selectAll('input:checked').data().map(keyfunc);
 }
 
 function anyChecked(selection) {
@@ -155,7 +163,7 @@ function colorScaleBox(selection, label) {
 function updateColorScaleItems(selection, items) {
   const listitems = selection.select('.dropdown-menu')
     .selectAll('li')
-      .data(items);
+      .data(items, d => d);
   listitems.exit().remove();
   listitems.enter()
     .append('li')
@@ -163,39 +171,38 @@ function updateColorScaleItems(selection, items) {
       .classed('dropdown-item', true)
       .classed('py-0', true)
       .attr('href', '#')
-      .attr('title', d => d)
+      .attr('title', d => d.name)
       .on('click', (event, d) => {
         selection.call(setSelectedColorScale, d);
         selection.dispatch('change', {bubbles: true});
       })
       .each((d, i, nodes) => {
-        const s = cscale.scales.color[d];
         d3.select(nodes[i])
-            .call(shape.colorBar(s.range), s.range, 80, d);
+            .call(shape.colorBar(d.range), d.range, 80, d);
       });
 }
 
 function setSelectedColorScale(selection, item) {
   const selected = selection.select('.selected');
-  const s = cscale.scales.color[item];
   selected.selectAll('svg').remove();
   selected.datum(item);  // Bind selected item record
   selected
-      .call(shape.colorBar(s.range), s.range, 80, item);
+      .call(shape.colorBar(item.range), item.range, 80, item.name);
 }
 
-function updateColorScaleBox(selection, item) {
-  //const data = selection.select('.dropdown-menu')
-  //  .selectAll('li').data();
+function updateColorScaleBox(selection, key) {
+  const data = selection.select('.dropdown-menu')
+    .selectAll('li').data();
+  const item = data.find(e => e.name === key);
   selection.call(setSelectedColorScale, item);
 }
 
-function colorScaleBoxValue(selection) {
+function colorScaleBoxItem(selection) {
   return selection.select('.selected').datum();
 }
 
-function colorScaleBoxItem(selection) {
-  return cscale.scales.color[selection.select('.selected').datum()];
+function colorScaleBoxValue(selection) {
+  return colorScaleBoxItem(selection).name;
 }
 
 
