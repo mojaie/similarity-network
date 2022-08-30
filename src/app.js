@@ -1,7 +1,7 @@
 
 /** @module app */
 
-import * as d3 from 'd3';
+import d3 from 'd3';
 
 import {default as hfile} from './common/file.js';
 import {default as client} from './common/client.js';
@@ -25,15 +25,23 @@ function sessionMenu(selection) {
       .classed('row', true)
       .classed('mb-1', true);
   // switch
-  selection.append('div')
+  const selectbox = selection.append('div')
       .classed('switch', true)
-      .classed('col-8', true)
-      .call(lbox.selectBox, 'Session')
-    .select("select")
+      .classed('col-6', true)
+      .call(lbox.selectBox, 'Session');
+  selectbox.select("select")
       .attr('disabled', true);
+  selectbox.select("label")
+      .classed('col-4', false)
+      .classed('col-3', true)
+      .classed('text-end', true);
+  selectbox.select("div")
+      .classed('col-8', false)
+      .classed('col-9', true);
+  
 
   const menu = selection.append('div')
-      .classed('col-4', true);
+      .classed('col-6', true);
   // open new file
   menu.append('span')
       .classed('open', true)
@@ -132,15 +140,22 @@ function snapshotMenu(selection) {
       .classed('row', true)
       .classed('mb-1', true)
   // switch
-  selection.append('div')
+  const selectbox = selection.append('div')
       .classed('switch', true)
-      .classed('col-8', true)
-      .call(lbox.selectBox, 'Snapshot')
-    .select("select")
+      .classed('col-6', true)
+      .call(lbox.selectBox, 'Snapshot');
+  selectbox.select("select")
       .attr('disabled', true);
+  selectbox.select("label")
+      .classed('col-4', false)
+      .classed('col-3', true)
+      .classed('text-end', true);
+  selectbox.select("div")
+      .classed('col-8', false)
+      .classed('col-9', true);
 
   const menu = selection.append('div')
-      .classed('col-4', true);
+      .classed('col-6', true);
   // save
   menu.append('span')
       .classed('save', true)
@@ -224,6 +239,8 @@ function updateSnapshotMenu(selection, state) {
 
 
 function headerMenu(selection) {
+  selection
+      .classed("my-1", true);
   selection.append("div")
       .attr("id", 'header-session')
       .call(sessionMenu);
@@ -250,10 +267,12 @@ function updateHeaderMenu(selection, state) {
 
 function setState(data) {
   // set view frame size (depends on browser)
-  const width = d3.select("#frame").property("offsetWidth");
-  const height = d3.select("#frame").property("offsetHeight");
+  const width = d3.select(".container-fluid").property("offsetWidth");
+  const height = d3.select(".container-fluid").property("offsetHeight");
 
-  const state = new NetworkState(data, width, height);
+  const state = new NetworkState(data, Math.floor(width * 0.75), height - 80);
+  d3.select("#workspace").style("height", `${height - 80}px`);
+  d3.select(".tab-content").style("max-height", `${height - 150}px`);
 
   // Title
   d3.select('title').text(state.sessionName);
@@ -270,9 +289,11 @@ function setState(data) {
 
   // Resize window
   window.onresize = () => {
-    const width = d3.select("#frame").property("offsetWidth");
-    const height = d3.select("#frame").property("offsetHeight");
-    state.setViewBox(width, height);
+    const width = d3.select(".container-fluid").property("offsetWidth");
+    const height = d3.select(".container-fluid").property("offsetHeight");
+    state.setViewBox(Math.floor(width * 0.75), height - 80);
+    d3.select("#workspace").style("height", `${height - 80}px`);
+    d3.select(".tab-content").style("max-height", `${height - 150}px`);
   }
 
   // Update all
@@ -282,6 +303,9 @@ function setState(data) {
     state.updateHeaderCallback();
     state.updateFilter();
     state.updateControlBoxCallback();
+    if (state.snapshots.length === 0) {
+      state.restartDispatcher();
+    }
   }
   // dispatch
   state.updateSnapshot(state.snapshotIndex);

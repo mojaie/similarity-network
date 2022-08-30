@@ -174,7 +174,9 @@ function viewComponent(selection) {
 
 function updateViewBox(selection, state) {
   selection
-      .attr('viewBox', `0 0 ${state.viewBox.right} ${state.viewBox.bottom}`);
+      .attr('viewBox', `0 0 ${state.viewBox.right} ${state.viewBox.bottom}`)
+      .attr('width', `${state.viewBox.right}px`)
+      .attr('height', `${state.viewBox.bottom}px`);
   selection.select(".boundary")
       .attr('width', state.viewBox.right)
       .attr('height', state.viewBox.bottom)

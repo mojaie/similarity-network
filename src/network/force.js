@@ -20,12 +20,12 @@ const forceParam = {
   moderate: {
     name: 'Moderate',
     force: d3.forceSimulation()
-      .force('link', d3.forceLink().id(d => d.__index).distance(60).strength(2))
+      .force('link', d3.forceLink().id(d => d.__index).distance(60).strength(1.3))
       .force('charge',
-        d3.forceManyBody().strength(-6000).distanceMin(15).distanceMax(720))
+        d3.forceManyBody().strength(-2000).distanceMin(15).distanceMax(1200))
       .force('collide', d3.forceCollide().radius(90))
-      .force('x', d3.forceX().strength(0.0002))
-      .force('y', d3.forceY().strength(0.0002))
+      .force('x', d3.forceX().strength(0.005))
+      .force('y', d3.forceY().strength(0.005))
   },
   sparse: {
     name: 'Sparse',
@@ -34,8 +34,8 @@ const forceParam = {
       .force('charge',
         d3.forceManyBody().strength(-6000).distanceMin(15).distanceMax(3600))
       .force('collide', d3.forceCollide().radius(90))
-      .force('x', d3.forceX().strength(0.0002))
-      .force('y', d3.forceY().strength(0.0002))
+      .force('x', d3.forceX().strength(0.01))
+      .force('y', d3.forceY().strength(0.01))
   }
 };
 
@@ -115,13 +115,18 @@ function setForce(selection, state) {
       selection.call(unstick, simulation, state);
       simulation.alpha(1).restart();
     };
-
-
-    if (state.forceActive) {
-      state.restartDispatcher();
-    } else {
-      state.stickDispatcher();
-    }
+    state.resetCoordsDispatcher = () => {
+      selection.selectAll('.node')
+        .each(d => {
+          delete d.x;
+          delete d.y;
+          delete d.vx;
+          delete d.vy;
+          delete d.fx;
+          delete d.fy;
+        });
+      simulation.nodes(state.fnodes).alpha(1).restart();
+    };
   };
 }
 

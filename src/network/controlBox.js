@@ -59,9 +59,9 @@ function LayoutControlBox(selection) {
       .classed('col-4', true)
       .call(button.buttonBox, 'Perturb', 'outline-success');
   activateButtons.append('div')
-      .classed('random', true)
-      .classed('col-4', true)
-      .call(button.buttonBox, 'Random', 'outline-warning');
+      .classed('reset', true)
+      .classed('col-8', true)
+      .call(button.buttonBox, 'Reset coords', 'outline-warning');
 }
 
 function updateLayoutControl(selection, state) {
@@ -103,13 +103,18 @@ function updateLayoutControl(selection, state) {
       });
   selection.select('.perturb')
       .on('click', function () {
-        // TODO: disabled by stick
         selection.select('.stick')
             .call(box.updateCheckBox, false)
             .dispatch('change');
         state.restartDispatcher();
       });
-  // TODO: random
+  selection.select('.reset')
+      .on('click', function () {
+        selection.select('.stick')
+            .call(box.updateCheckBox, false)
+            .dispatch('change');
+        state.resetCoordsDispatcher();
+      });
 }
 
 
@@ -648,18 +653,18 @@ function StatisticsBox(selection) {
   const nodecount = selection.append('div')
       .classed('row', true);
   nodecount.append('div')
-      .classed('col-6', true)
-      .text("Node count:");
+      .classed('col-8', true)
+      .text("Nodes(shown/total): ");
   nodecount.append('div')
-      .classed('col-6', true)
+      .classed('col-4', true)
       .classed("nodecount", true);
   const edgecount = selection.append('div')
       .classed('row', true);
   edgecount.append('div')
-      .classed('col-6', true)
-      .text("Edge count:");
+      .classed('col-8', true)
+      .text("Edges(shown/total): ");
   edgecount.append('div')
-      .classed('col-6', true)
+      .classed('col-4', true)
       .classed("edgecount", true);
 
   const logd = selection.append('div')
@@ -674,15 +679,17 @@ function StatisticsBox(selection) {
 
 
 function updateStatistics(selection, state) {
-  const ncnt = state.fnodes.length;
-  const ecnt = state.fedges.length;
-  const maxedges = ncnt * (ncnt - 1) / 2;
-  const logd = d3.format('.2f')(Math.log10(ecnt / maxedges));
+  const ncnt = state.nodes.length;
+  const ecnt = state.edges.length;
+  const fncnt = state.fnodes.length;
+  const fecnt = state.fedges.length;
+  const maxedges = fncnt * (fncnt - 1) / 2;
+  const logd = d3.format('.2f')(Math.log10(fecnt / maxedges));
 
   selection.select('.nodecount')
-      .text(ncnt);
+      .text(`${fncnt}/${ncnt}`);
   selection.select('.edgecount')
-      .text(ecnt);
+      .text(`${fecnt}/${ecnt}`);
   selection.select('.logd')
       .text(logd);
 }
@@ -724,10 +731,6 @@ function controlBoxItem(selection, id, active) {
 
 
 function controlBox(selection) {
-  // Clean up
-  selection.select(".nav-tabs").remove();
-  selection.select(".tab-content").remove();
-
   const tabs = selection.append("ul")
       .classed("nav", true)
       .classed("nav-tabs", true)
@@ -736,7 +739,8 @@ function controlBox(selection) {
   const content = selection.append("div")
       .classed("tab-content", true)
       .classed('p-2', true)
-      .attr("id", "control-tab-content");
+      .attr("id", "control-tab-content")
+      .style("overflow-y", "scroll");
 
   // Layout
   tabs.append('li')
