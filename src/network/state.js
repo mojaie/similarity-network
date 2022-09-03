@@ -63,15 +63,6 @@ export default class NetworkState extends TransformState {
     this.forceActive = true;
     this.stateChanged = false;  // if true, there are unsaved changes
 
-    // boundary: components area, depends on max/min coords of components.
-    // fit: operation to find transform where focusArea = boundary
-    this.boundary = {
-      top: 0,
-      right: this.fieldWidth,
-      bottom: this.fieldHeight,
-      left: 0
-    }
-
     // Client event listeners
     this.zoomListener = null;
     this.dragListener = null;
@@ -239,37 +230,28 @@ export default class NetworkState extends TransformState {
     this.updateVisibility();
   }
 
-  setBoundary() {
-    // TODO: only used for fit operation
-    // called by node coords operations (force, drug, ...)
-    const xs = [];
-    const ys = [];
-    this.fnodes.forEach(e => {
-      xs.push(e.x);
-      ys.push(e.y);
-    });
-    this.boundary.top = Math.min.apply(null, ys);
-    this.boundary.left = Math.min.apply(null, xs);
-    this.boundary.bottom = Math.max.apply(null, ys);
-    this.boundary.right = Math.max.apply(null, xs);
-    // this.showBoundary(); // debug
-  }
-
   fitTransform() {  // dispatcher: fit button
-    this.setBoundary();
+    // calculate boundary
+    const xs = this.fnodes.map(e => e.x);
+    const ys = this.fnodes.map(e => e.y);
+    const btop = Math.min(...ys);
+    const bleft = Math.min(...xs);
+    const bbottom = Math.max(...ys);
+    const bright = Math.max(...xs);
+
     this.stateChanged = true;
     const vh = this.viewBox.bottom;
     const vw = this.viewBox.right;
     const vr = vw / vh;
-    const bh = this.boundary.bottom - this.boundary.top;
-    const bw = this.boundary.right - this.boundary.left;
+    const bh = bbottom - btop;
+    const bw = bright - bleft;
     const br = bw / bh;
     const isPortrait = vr >= br;
     const tk = isPortrait ? vh / bh : vw / bw;
     const adjustH = isPortrait ? (vw - bw * tk) / 2 : 0;
     const adjustV = isPortrait ? 0 : (vh - bh * tk) / 2;
-    const tx = -(this.boundary.left) * tk + adjustH;
-    const ty = -(this.boundary.top) * tk + adjustV;
+    const tx = -bleft * tk + adjustH;
+    const ty = -btop * tk + adjustV;
     this.setTransform(tx, ty, tk);
     this.zoomCallback();
     this.updateVisibility();
