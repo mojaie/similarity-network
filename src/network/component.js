@@ -207,9 +207,11 @@ function setViewCallbacks(selection, state) {
   }
   state.updateNodeAttrCallback = () => {
     selection.select(".node-layer").call(updateNodeAttrs, state);
+    state.updateMenuButtonCallback();
   };
   state.updateEdgeAttrCallback = () => {
     selection.select(".edge-layer").call(updateEdgeAttrs, state);
+    state.updateMenuButtonCallback();
   };
 }
 

@@ -267,12 +267,19 @@ function updateHeaderMenu(selection, state) {
 
 function setState(data) {
   // set view frame size (depends on browser)
-  const width = d3.select(".container-fluid").property("offsetWidth");
-  const height = d3.select(".container-fluid").property("offsetHeight");
+  function setFrameSize() {
+    const width = d3.select(".container-fluid").property("offsetWidth");
+    const height = d3.select(".container-fluid").property("offsetHeight");
+    const headerH = d3.select("#header").property("offsetHeight");
+    const tabH = d3.select("#control-tab").property("offsetHeight");
+    const controlW = d3.select("#control").property("offsetWidth");
+    d3.select("#workspace").style("height", `${height - headerH - 15}px`);
+    d3.select(".tab-content").style("max-height", `${height - headerH - tabH - 25}px`);
+    return [width - controlW - 15, height - headerH - 15]
+  }
 
-  const state = new NetworkState(data, Math.floor(width * 0.75), height - 80);
-  d3.select("#workspace").style("height", `${height - 80}px`);
-  d3.select(".tab-content").style("max-height", `${height - 150}px`);
+  const fsize = setFrameSize();
+  const state = new NetworkState(data, fsize[0], fsize[1]);
 
   // Title
   d3.select('title').text(state.sessionName);
@@ -289,11 +296,8 @@ function setState(data) {
 
   // Resize window
   window.onresize = () => {
-    const width = d3.select(".container-fluid").property("offsetWidth");
-    const height = d3.select(".container-fluid").property("offsetHeight");
-    state.setViewBox(Math.floor(width * 0.75), height - 80);
-    d3.select("#workspace").style("height", `${height - 80}px`);
-    d3.select(".tab-content").style("max-height", `${height - 150}px`);
+    const fsize = setFrameSize();
+    state.setViewBox(fsize[0], fsize[1]);
   }
 
   // Update all
