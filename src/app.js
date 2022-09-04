@@ -186,7 +186,6 @@ function updateSnapshotMenu(selection, state) {
       .call(lbox.updateSelectBoxValue, state.snapshotIndex)
       .on('change', event => {
         const i = lbox.selectBoxValueIndex(d3.select(event.currentTarget));
-        state.snapshotIndex = i;
         state.updateSnapshot(i);
       })
     .select("select")
@@ -195,12 +194,11 @@ function updateSnapshotMenu(selection, state) {
   selection.select('.save')
       .classed('d-none', !state.stateChanged)
       .on('click', async () => {
-        state.stickDispatcher();
+        state.dispatch("stick");
         const snapshot = state.getSnapshot();
         await idb.appendSnapshot(state.sessionID, snapshot);
         state.snapshots.push(snapshot);
-        state.snapshotIndex = state.snapshots.length - 1;
-        state.updateSnapshot(state.snapshotIndex);
+        state.updateSnapshot(state.snapshots.length - 1);
       });
   // discard change
   selection.select('.discard')
@@ -221,7 +219,7 @@ function updateSnapshotMenu(selection, state) {
           await idb.renameSnapshot(state.sessionID, state.snapshotIndex, newName);
           state.snapshots[state.snapshotIndex].name = newName;
           state.name = newName;
-          state.updateHeaderCallback();
+          state.dispatch("updateHeader");
         }
       });
   // delete
@@ -256,12 +254,9 @@ function updateHeaderMenu(selection, state) {
   selection.select("#header-snapshot")
       .call(updateSnapshotMenu, state);
 
-  state.updateHeaderCallback = () => {
+  state.register("updateHeader", () => {
     selection.call(updateHeaderMenu, state);
-  };
-  state.updateMenuButtonCallback = () => {
-    selection.call(updateHeaderMenu, state);
-  };
+  });
 }
 
 
@@ -301,16 +296,18 @@ function setState(data) {
   }
 
   // Update all
-  state.updateSnapshotCallback = () => {
-    state.setFocusArea();
-    state.resizeCallback();
-    state.updateHeaderCallback();
+  state.register("updateSnapshot", () => {
+    state.dispatch("updateViewBox");
     state.updateFilter();
-    state.updateControlBoxCallback();
+    state.dispatch("updateControlBox");
     if (state.snapshots.length === 0) {
-      state.restartDispatcher();
+      state.dispatch("restart");
+      state.setStateChanged(true);
+    } else {
+      state.setStateChanged(false);
     }
-  }
+  });
+
   // dispatch
   state.updateSnapshot(state.snapshotIndex);
 }

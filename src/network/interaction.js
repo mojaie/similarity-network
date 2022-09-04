@@ -9,7 +9,7 @@ import {default as component} from './component.js';
 function dragListener(selection, state) {
   return d3.drag()
     .on('start', () => {
-      state.stateChanged = true;
+      state.setStateChanged(true);
     })
     .on('drag', event => {
       if (event.subject.__selected) {
@@ -49,10 +49,11 @@ function zoomListener(selection, state) {
     .on('.drag', null);  // disable rectSelect
   return d3.zoom()
     .on('start', () => {
-      state.stateChanged = true;
+      state.setStateChanged(true);
     })
     .on('zoom', event => {
       const t = event.transform;
+      // direct DOM update
       selection.select('.field')
           .attr('transform', `translate(${t.x}, ${t.y}) scale(${t.k})`)
       // Smooth transition (continuously update components on zoom out)
@@ -92,7 +93,7 @@ function rectSelectListener(selection, state) {
     });
   return d3.drag()
     .on('start', event => {
-      state.stateChanged = true;
+      state.setStateChanged(true);
       origin.x = event.x;
       origin.y = event.y;
       rect.attr('visibility', 'visible')
@@ -138,7 +139,6 @@ function selectListener(selection, state) {
         .on('touchmove', event => { event.preventDefault(); })
         .on('click.select', event => {
           event.stopPropagation();
-          state.stateChanged = true;
           state.nodes.forEach((e, i) => {
             state.nodes[i].__selected = false;
           });
@@ -157,25 +157,12 @@ function multiSelectListener(selection, state) {
         .on('touchmove', event => { event.preventDefault(); })
         .on('click.select', event => {
           event.stopPropagation();
-          state.stateChanged = true;
           const n = d3.select(event.currentTarget).datum().__index;
           state.nodes[n].__selected = state.nodes[n].__selected ? false : true;
           selection.selectAll(".node")
             .call(component.updateNodeSelection);
         });
   };
-}
-
-
-function resume(selection, state) {
-  const tf = state.transform;
-  selection
-      .call(
-        d3.zoom().transform,
-        d3.zoomIdentity.translate(tf.x, tf.y).scale(tf.k)
-      )
-    .select('.field')
-      .attr('transform', `translate(${tf.x}, ${tf.y}) scale(${tf.k})`);
 }
 
 
@@ -231,21 +218,19 @@ function setInteraction(selection, state) {
   state.selectListener = selectListener(selection, state);
   state.dragListener = dragListener(selection, state);
 
-  state.zoomCallback = () => {
-    selection.call(resume, state);
-  }
+  state.register("updateZoom", () => {
+    const tf = state.transform;
+    selection.call(
+      d3.zoom().transform,
+      d3.zoomIdentity.translate(tf.x, tf.y).scale(tf.k)
+    );
+  });
   // Update interaction events
-  state.updateVisibilityCallback = () => {
-    selection.call(component.updateComponents, state);
+  state.register("updateNodeInteraction", () => {
     selection.call(state.zoomListener);
     selection.selectAll('.node').call(state.selectListener);
     selection.selectAll('.node').call(state.dragListener);
-  }
-
-  // Fit to the viewBox
-  state.fitDispatcher = () => {
-    state.fitTransform();
-  };
+  });
 }
 
 

@@ -50,8 +50,8 @@ function forceSimulation(type, width, height) {
 function forceDragListener(selection, simulation, state) {
   return d3.drag()
     .on('start', event => {
-      state.stateChanged = true;
-      if (!event.active) state.relaxDispatcher();
+      state.setStateChanged(true);
+      if (!event.active) state.dispatch("relax");
     })
     .on('drag', event => {
       event.subject.fx = event.x;
@@ -72,6 +72,7 @@ function stick(selection, simulation, state) {
       d.fx = d.x;
       d.fy = d.y;
     });
+  // TODO: switch listeners by State method
   state.dragListener = interaction.dragListener(selection, state);
   state.forceActive = false;
 }
@@ -84,13 +85,12 @@ function unstick(selection, simulation, state) {
       d.fy = null;
     });
   state.dragListener = forceDragListener(selection, simulation, state);
-  state.stateChanged = true;
   state.forceActive = true;
 }
 
 
 function setForce(selection, state) {
-  state.setForceDispatcher = () => {
+  state.register("setForce", () => {
     const simulation = forceSimulation(
         state.config.forceParam, state.fieldWidth, state.fieldHeight);
     simulation.nodes(state.fnodes)
@@ -104,18 +104,19 @@ function setForce(selection, state) {
         state.updateVisibility();
       });
 
-    state.stickDispatcher = () => {
+    state.register("stick", () => {
       selection.call(stick, simulation, state);
-    };
-    state.relaxDispatcher = () => {
+      state.updateVisibility();
+    });
+    state.register("relax", () => {
       selection.call(unstick, simulation, state);
       simulation.alpha(0.1).restart();
-    };
-    state.restartDispatcher = () => {
+    });
+    state.register("restart", () => {
       selection.call(unstick, simulation, state);
       simulation.alpha(1).restart();
-    };
-    state.resetCoordsDispatcher = () => {
+    });
+    state.register("resetCoords", () => {
       selection.selectAll('.node')
         .each(d => {
           delete d.x;
@@ -126,8 +127,8 @@ function setForce(selection, state) {
           delete d.fy;
         });
       simulation.nodes(state.fnodes).alpha(1).restart();
-    };
-  };
+    });
+  });
 }
 
 

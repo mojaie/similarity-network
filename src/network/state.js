@@ -66,40 +66,15 @@ export default class NetworkState extends TransformState {
     // Client event listeners
     this.zoomListener = null;
     this.dragListener = null;
-    // update viewBox component when browser resize event is dispatched and setViewBox is called
-    this.resizeCallback = () => {};
-    // dispatched when fit is called
-    this.fitDispatcher = () => {};
 
-    this.updateHeaderCallback = () => {};
-    this.updateMenuButtonCallback = () => {};
-    this.updateControlBoxCallback = () => {};
-
-    // update component attributes when controlBox form values changed
-    this.updateNodeAttrCallback = () => {};
-    this.updateEdgeAttrCallback = () => {};
-    this.updateCoordsCallback = () => {};
-
-    // update component visibility and events when vnodes/vedges changed
-    this.updateVisibilityCallback = () => {};
-    // update component filters and forces when fnodes/fedges changed
-    this.updateFilterCallback = () => {
-      this.setForceDispatcher();
-      this.updateControlBoxCallback();
-    };
-    // update all when snapshot changed
-    this.updateSnapshotCallback = () => {};
+    this.callbacks = {};
 
     // update coords and force indicators in each ticks
     this.updateForceIndicatorCallback = () => {};
     this.tickCallback = sim => {
-      this.updateCoordsCallback();
+      this.dispatch("updateCoords");
       this.updateForceIndicatorCallback(sim);
     };
-    // dispatched when force operations are called
-    this.stickDispatcher = () => {};
-    this.relaxDispatcher = () => {};
-    this.restartDispatcher = () => {};
 
     // Initialize snapshot
     this.name = "default";
@@ -127,9 +102,20 @@ export default class NetworkState extends TransformState {
     this.snapshotIndex = this.snapshots.length - 1;
   }
 
+
+  register(name, func) {
+    this.callbacks[name] = func;
+  }
+
+  dispatch(name) {
+    if (this.callbacks.hasOwnProperty(name)) {
+      this.callbacks[name]();
+    }
+  }
+
   updateSnapshot(idx) {
     if (idx >= 0) {  // idx = -1 -> no snapshots (default configuration)
-      this.stateChanged = false;
+      this.snapshotIndex = idx;
       this.forceActive = false;
       const snapshot = this.snapshots[idx];
       this.name = snapshot.name;
@@ -144,7 +130,8 @@ export default class NetworkState extends TransformState {
         this.nodes[i].fy = e.y;  // force will update y by fy
       });
     }
-    this.updateSnapshotCallback();
+    this.setFocusArea();  // set focusArea of initial viewBox
+    this.dispatch("updateSnapshot");
   }
 
   getSnapshot() {
@@ -215,22 +202,27 @@ export default class NetworkState extends TransformState {
       this.edgeIQR[e] = scale.IQR(this.fedges.map(n => n[e]));
     });
 
-    this.updateFilterCallback();
-    this.zoomCallback();
+    this.dispatch("setForce");
+    this.dispatch("updateControlBox");  // filter panes
+    // set transform
+    this.dispatch("updateField");
+    this.dispatch("updateZoom");
     this.updateVisibility();
   }
 
-  setViewBox(width, height) {  // dispatcher: resize browser
+  setViewBox(width, height) {
     super.setViewBox(width, height);
-    this.resizeCallback();  // component.updateView()
+    this.dispatch("updateViewBox");
   }
 
   setTransform(tx, ty, tk) {
     super.setTransform(tx, ty, tk);
+    this.dispatch("updateField");
+    this.dispatch("updateZoom");
     this.updateVisibility();
   }
 
-  fitTransform() {  // dispatcher: fit button
+  fitTransform() {
     // calculate boundary
     const xs = this.fnodes.map(e => e.x);
     const ys = this.fnodes.map(e => e.y);
@@ -239,7 +231,6 @@ export default class NetworkState extends TransformState {
     const bbottom = Math.max(...ys);
     const bright = Math.max(...xs);
 
-    this.stateChanged = true;
     const vh = this.viewBox.bottom;
     const vw = this.viewBox.right;
     const vr = vw / vh;
@@ -253,8 +244,6 @@ export default class NetworkState extends TransformState {
     const tx = -bleft * tk + adjustH;
     const ty = -btop * tk + adjustV;
     this.setTransform(tx, ty, tk);
-    this.zoomCallback();
-    this.updateVisibility();
   }
 
   updateVisibility() {
@@ -278,9 +267,24 @@ export default class NetworkState extends TransformState {
     if (ecnt > this.config.showEdgeThreshold && !this.config.alwaysShowEdge) {
       this.vedges = [];
     }
-
-    this.updateVisibilityCallback();
-    this.updateMenuButtonCallback();
+    this.dispatch("updateVisibility");
+    this.dispatch("updateNodeInteraction");
+    this.setStateChanged(true);
   }
 
+  setAppearance(group, field, value) {
+    this.appearance[group][field] = value;
+    if (group.startsWith("node")) {
+      this.dispatch("updateNodeAttr");
+    } else if (group.startsWith("edge")) {
+      this.dispatch("updateEdgeAttr");
+    }
+    this.dispatch("updateControlBox");
+    this.setStateChanged(true);
+  }
+
+  setStateChanged(value) {
+    this.stateChanged = value;
+    this.dispatch("updateHeader");
+  }
 }

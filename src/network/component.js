@@ -179,8 +179,7 @@ function updateViewBox(selection, state) {
       .attr('height', `${state.viewBox.bottom}px`);
   selection.select(".boundary")
       .attr('width', state.viewBox.right)
-      .attr('height', state.viewBox.bottom)
-  selection.call(updateField, state);
+      .attr('height', state.viewBox.bottom);
 }
 
 
@@ -192,27 +191,25 @@ function updateField(selection, state) {
 
 
 function setViewCallbacks(selection, state) {
-  state.resizeCallback = () => {
+  state.register("updateViewBox", () => {
     selection.call(updateViewBox, state);
-  }
-  state.zoomCallback = () => {  // override by interaction
+  });
+  state.register("updateField", () => {
     selection.call(updateField, state);
-  }
-  state.updateVisibilityCallback = () => {  // override by interaction
+  });
+  state.register("updateVisibility", () => {
     selection.call(updateComponents, state);
-  }
-  state.updateCoordsCallback = () => {
+  });
+  state.register("updateNodeAttr", () => {
+    selection.select(".node-layer").call(updateNodeAttrs, state);
+  });
+  state.register("updateEdgeAttr", () => {
+    selection.select(".edge-layer").call(updateEdgeAttrs, state);
+  });
+  state.register("updateCoords", () => {
     selection.selectAll(".node").call(updateNodeCoords);
     selection.selectAll(".link").call(updateEdgeCoords);
-  }
-  state.updateNodeAttrCallback = () => {
-    selection.select(".node-layer").call(updateNodeAttrs, state);
-    state.updateMenuButtonCallback();
-  };
-  state.updateEdgeAttrCallback = () => {
-    selection.select(".edge-layer").call(updateEdgeAttrs, state);
-    state.updateMenuButtonCallback();
-  };
+  });
 }
 
 

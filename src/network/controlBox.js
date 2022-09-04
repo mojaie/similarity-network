@@ -68,7 +68,7 @@ function updateLayoutControl(selection, state) {
   // Fit
   selection.select('.fit')
       .on('click', function () {
-        state.fitDispatcher();
+        state.fitTransform();
       });
   // Force layout
   state.updateForceIndicatorCallback = (simulation) => {
@@ -86,14 +86,12 @@ function updateLayoutControl(selection, state) {
       .call(box.updateCheckBox, !state.forceActive)
       .on('change', event => {
         const value = box.checkBoxValue(d3.select(event.currentTarget));
-        state.forceActive = !value;
         selection.select('.temperature')
             .style('background-color', value ? '#a3e4d7' : '#e9ecef')
           .select('.progress-bar')
             .style('width', `0%`)
             .attr('aria-valuenow', 0);
-        value ? state.stickDispatcher() : state.relaxDispatcher();
-        state.updateVisibility();
+        value ? state.dispatch("stick") : state.dispatch("relax");
       });
   selection.select('.forceparam')
       .call(lbox.updateSelectBoxValue, state.config.forceParam)
@@ -106,14 +104,14 @@ function updateLayoutControl(selection, state) {
         selection.select('.stick')
             .call(box.updateCheckBox, false)
             .dispatch('change');
-        state.restartDispatcher();
+        state.dispatch("restart");
       });
   selection.select('.reset')
       .on('click', function () {
         selection.select('.stick')
             .call(box.updateCheckBox, false)
             .dispatch('change');
-        state.resetCoordsDispatcher();
+        state.dispatch("resetCoords");
       });
 }
 
@@ -142,7 +140,6 @@ function updateFilterControl(selection, state) {
           value: 0,
           groups: []
         });
-        state.stateChanged = true;
         state.updateFilter();
       });
   const container = selection.select(".filter-container")
@@ -157,7 +154,6 @@ function updateFilterControl(selection, state) {
         .call(filterComponent, d, i, state)
         .on('change', event => {
           state.filters[i] = filterValue(d3.select(event.currentTarget));
-          state.stateChanged = true;
           state.updateFilter();
         })
         .on('remove', async event => {
@@ -165,7 +161,6 @@ function updateFilterControl(selection, state) {
             'Are you sure you want to delete the filter?');
           if (ok) {
             state.filters.splice(i, 1);
-            state.stateChanged = true;
             state.updateFilter();
           }
         });
@@ -369,66 +364,69 @@ function updateNodeControl(selection, state) {
   const isNumColor = state.numericNodeFields.includes(state.appearance.nodeColor.field) || cnull;
   const colorRange = scale.colorScales.filter(e => e.type === (isNumColor ? "continuous" : "discrete"));
   const colorScale = isNumColor ? ["constant", "linear", "log"] : ["constant", "categorical"];
-  selection
-      .on('change', () => {
-        state.stateChanged = true;
-        selection.call(updateNodeControl, state);
-        state.updateNodeAttrCallback();
-      });
   selection.select('.colorfield')
       .call(lbox.updateSelectBoxOptions, qfields, undefined, undefined, cnull)
       .call(lbox.updateSelectBoxValue, state.appearance.nodeColor.field)
       .on('change', event => {
-        state.appearance.nodeColor.field = lbox.selectBoxValue(d3.select(event.currentTarget));
+        state.setAppearance(
+          "nodeColor", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
       });
   selection.select('.colorrange')
       .call(lbox.updateColorScaleItems, colorRange)
       .call(lbox.updateColorScaleBox, state.appearance.nodeColor.rangePreset)
       .on('change', event => {
-        state.appearance.nodeColor.rangePreset = lbox.colorScaleBoxValue(d3.select(event.currentTarget));
+        state.setAppearance(
+          "nodeColor", "rangePreset", lbox.colorScaleBoxValue(d3.select(event.currentTarget)));
       });
   selection.select('.colorscale')
       .call(lbox.updateSelectBoxOptions, colorScale)
       .call(lbox.updateSelectBoxValue, state.appearance.nodeColor.scale)
       .on('change', event => {
-        state.appearance.nodeColor.scale = lbox.selectBoxValue(d3.select(event.currentTarget));
+        state.setAppearance(
+          "nodeColor", "scale", lbox.selectBoxValue(d3.select(event.currentTarget)));
       });
 
   selection.select('.sizefield')
       .call(lbox.updateSelectBoxOptions, nfields, undefined, undefined, snull)
       .call(lbox.updateSelectBoxValue, state.appearance.nodeSize.field)
       .on('change', event => {
-        state.appearance.nodeSize.field = lbox.selectBoxValue(d3.select(event.currentTarget));
+        state.setAppearance(
+          "nodeSize", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
       });
   selection.select('.sizerange')
       .call(lbox.updateSelectBoxOptions, scale.nodeSizeScales.map(e => e.name))
       .call(lbox.updateSelectBoxValue, state.appearance.nodeSize.rangePreset)
       .on('change', event => {
-        state.appearance.nodeSize.rangePreset = lbox.selectBoxValue(d3.select(event.currentTarget));
+        state.setAppearance(
+          "nodeSize", "rangePreset", lbox.selectBoxValue(d3.select(event.currentTarget)));
       });
   selection.select('.sizescale')
       .call(lbox.updateSelectBoxOptions, ["constant", "linear", "log"])
       .call(lbox.updateSelectBoxValue, state.appearance.nodeSize.scale)
       .on('change', event => {
-        state.appearance.nodeSize.scale = lbox.selectBoxValue(d3.select(event.currentTarget));
+        state.setAppearance(
+          "nodeSize", "scale", lbox.selectBoxValue(d3.select(event.currentTarget)));
       });
 
   const labelFields = state.nodeFields.filter(e => !state.imageNodeFields.includes(e));
   selection.select('.labelvisible')
       .call(box.updateCheckBox, state.appearance.nodeLabel.visible)
       .on('change', event => {
-        state.appearance.nodeLabel.visible = box.checkBoxValue(d3.select(event.currentTarget));
+        state.setAppearance(
+          "nodeLabel", "visible", box.checkBoxValue(d3.select(event.currentTarget)));
       });
   selection.select('.labelfield')
       .call(lbox.updateSelectBoxOptions, labelFields, undefined, undefined, lnull)
       .call(lbox.updateSelectBoxValue, state.appearance.nodeLabel.field)
       .on('change', event => {
-        state.appearance.nodeLabel.field = lbox.selectBoxValue(d3.select(event.currentTarget));
+        state.setAppearance(
+          "nodeLabel", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
       });
   selection.select('.labelsize')
       .call(box.updateFormValue, state.appearance.nodeLabel.size)
       .on('change', event => {
-        state.appearance.nodeLabel.size = box.formValue(d3.select(event.currentTarget));
+        state.setAppearance(
+          "nodeLabel", "size", box.formValue(d3.select(event.currentTarget)));
       });
 
   const imageFields = state.nodeFields.filter(e => state.imageNodeFields.includes(e));
@@ -436,15 +434,14 @@ function updateNodeControl(selection, state) {
       .call(lbox.updateSelectBoxOptions, imageFields, undefined, undefined, inull)
       .call(lbox.updateSelectBoxValue, state.appearance.nodeImage.field)
       .on('change', event => {
-        state.appearance.nodeImage.field = lbox.selectBoxValue(d3.select(event.currentTarget));
+        state.setAppearance(
+          "nodeImage", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
       });
   selection.select('.shownodeimage')
       .call(box.updateCheckBox, state.config.alwaysShowNodeImage)
       .on('change', event => {
-        state.stateChanged = true;
         state.config.alwaysShowNodeImage = box.checkBoxValue(d3.select(event.currentTarget));
         state.updateVisibility();
-        event.stopPropagation();
       });
 }
 
@@ -560,74 +557,77 @@ function updateEdgeControl(selection, state) {
   const isNumColor = state.numericEdgeFields.includes(state.appearance.edgeColor.field) || cnull;
   const colorRange = scale.colorScales.filter(e => e.type === (isNumColor ? "continuous" : "discrete"));
   const colorScale = isNumColor ? ["constant", "linear", "log"] : ["constant", "categorical"];
-  selection
-      .on('change', () => {
-        state.stateChanged = true;
-        state.updateEdgeAttrCallback();
-      });
+
   selection.select('.colorfield')
       .call(lbox.updateSelectBoxOptions, qfields, undefined, undefined, cnull)
       .call(lbox.updateSelectBoxValue, state.appearance.edgeColor.field)
       .on('change', event => {
-        state.appearance.edgeColor.field = lbox.selectBoxValue(d3.select(event.currentTarget));
+        state.setAppearance(
+          "edgeColor", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
       });
   selection.select('.colorrange')
       .call(lbox.updateColorScaleItems, colorRange)
       .call(lbox.updateColorScaleBox, state.appearance.edgeColor.rangePreset)
       .on('change', event => {
-        state.appearance.edgeColor.rangePreset = lbox.colorScaleBoxValue(d3.select(event.currentTarget));
+        state.setAppearance(
+          "edgeColor", "rangePreset", lbox.colorScaleBoxValue(d3.select(event.currentTarget)));
       });
   selection.select('.colorscale')
       .call(lbox.updateSelectBoxOptions, colorScale)
       .call(lbox.updateSelectBoxValue, state.appearance.edgeColor.scale)
       .on('change', event => {
-        state.appearance.edgeColor.scale = lbox.selectBoxValue(d3.select(event.currentTarget));
+        state.setAppearance(
+          "edgeColor", "scale", lbox.selectBoxValue(d3.select(event.currentTarget)));
       });
 
   selection.select('.widthfield')
       .call(lbox.updateSelectBoxOptions, nfields, undefined, undefined, wnull)
       .call(lbox.updateSelectBoxValue, state.appearance.edgeWidth.field)
       .on('change', event => {
-        state.appearance.edgeWidth.field = lbox.selectBoxValue(d3.select(event.currentTarget));
+        state.setAppearance(
+          "edgeWidth", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
       });
   selection.select('.widthrange')
       .call(lbox.updateSelectBoxOptions, scale.edgeWidthScales.map(e => e.name))
       .call(lbox.updateSelectBoxValue, state.appearance.edgeWidth.rangePreset)
       .on('change', event => {
-        state.appearance.edgeWidth.rangePreset = lbox.selectBoxValue(d3.select(event.currentTarget));
+        state.setAppearance(
+          "edgeWidth", "rangePreset", lbox.selectBoxValue(d3.select(event.currentTarget)));
       });
   selection.select('.widthscale')
       .call(lbox.updateSelectBoxOptions, ["constant", "linear", "log"])
       .call(lbox.updateSelectBoxValue, state.appearance.edgeWidth.scale)
       .on('change', event => {
-        state.appearance.edgeWidth.scale = lbox.selectBoxValue(d3.select(event.currentTarget));
+        state.setAppearance(
+          "edgeWidth", "scale", lbox.selectBoxValue(d3.select(event.currentTarget)));
       });
 
   const labelFields = state.edgeFields.filter(e => !["source", "target"].includes(e));
   selection.select('.labelvisible')
       .call(box.updateCheckBox, state.appearance.edgeLabel.visible)
       .on('change', event => {
-        state.appearance.edgeLabel.visible = box.checkBoxValue(d3.select(event.currentTarget));
+        state.setAppearance(
+          "edgeLabel", "visible", box.checkBoxValue(d3.select(event.currentTarget)));
       });
   selection.select('.labelfield')
       .call(lbox.updateSelectBoxOptions, labelFields, undefined, undefined, lnull)
       .call(lbox.updateSelectBoxValue, state.appearance.edgeLabel.field)
       .on('change', event => {
-        state.appearance.edgeLabel.field = lbox.selectBoxValue(d3.select(event.currentTarget));
+        state.setAppearance(
+          "edgeLabel", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
       });
   selection.select('.labelsize')
       .call(box.updateFormValue, state.appearance.edgeLabel.size)
       .on('change', event => {
-        state.appearance.edgeLabel.size = box.formValue(d3.select(event.currentTarget));
+        state.setAppearance(
+          "edgeLabel", "size", box.formValue(d3.select(event.currentTarget)));
       });
 
   selection.select('.showedge')
       .call(box.updateCheckBox, state.config.alwaysShowEdge)
       .on('change', event => {
-        state.stateChanged = true;
         state.config.alwaysShowEdge = box.checkBoxValue(d3.select(event.currentTarget));
         state.updateVisibility();
-        event.stopPropagation();
       });
 }
 
@@ -791,9 +791,9 @@ function updateControlBox(selection, state) {
   selection.select('#control-stat')
       .call(updateStatistics, state);
 
-  state.updateControlBoxCallback = () => {
+  state.register("updateControlBox", () => {
     selection.call(updateControlBox, state);
-  };
+  });
 }
 
 
