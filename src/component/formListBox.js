@@ -3,7 +3,6 @@
 
 import d3 from 'd3';
 
-import {default as cscale} from '../common/scale.js';
 import {default as badge} from './badge.js';
 import {default as shape} from './shape.js';
 

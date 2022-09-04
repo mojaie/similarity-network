@@ -4,9 +4,6 @@
 import d3 from 'd3';
 
 import {default as scale} from '../common/scale.js';
-import {default as misc} from '../common/misc.js';
-
-import {default as legend} from '../component/legend.js';
 
 
 function updateNodes(selection, records) {

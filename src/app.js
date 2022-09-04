@@ -4,7 +4,7 @@
 import d3 from 'd3';
 
 import {default as hfile} from './common/file.js';
-import {default as client} from './common/client.js';
+import {default as misc} from './common/misc.js';
 import {default as idb} from './common/idb.js';
 
 import {default as badge} from './component/badge.js';
@@ -315,7 +315,7 @@ function setState(data) {
 
 async function run() {
   // Check web browser compatibility
-  const err = client.compatibility();
+  const err = misc.compatibility();
   if (err) {
     d3.select('body')
       .style('color', '#ff0000')
