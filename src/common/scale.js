@@ -181,9 +181,9 @@ function IQR(arr) {
 
 
 // Default field patterns
-const IMAGE_FIELD_PATTERN = new RegExp("structure", "i");
+const IMAGE_FIELD_PATTERN = new RegExp("(structure|image|svg)", "i");
 const NUM_FIELD_PATTERN = new RegExp("(IC50|EC50|AC50|%|ratio|^mw$|logp|weight)", "i");
-const CAT_FIELD_PATTERN = new RegExp("(cluster|group|type)", "i");
+const CAT_FIELD_PATTERN = new RegExp("(class|category|cluster|group|type)", "i");
 
 function fieldType(field, config) {
   if (config.imageFields.includes(field)) {

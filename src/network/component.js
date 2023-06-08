@@ -15,7 +15,7 @@ function updateNodes(selection, records) {
       .attr('class', 'node');
   entered.append('circle')
       .attr('class', 'node-symbol');
-  entered.append('g')
+  entered.append('foreignObject')
       .attr('class', 'node-image');
   entered.append('foreignObject')
       .attr('class', 'node-html')
@@ -68,13 +68,16 @@ function updateNodeAttrs(selection, state) {
       .attr('overflow', 'visible');
   fo.select('div')
       .style('font-size', `${labelSize}px`)
-      .style('color', d => d.labelColor || "#cccccc")
+      .style('color', d => d.labelColor || "#666666")
       .style('text-align', 'center')
       .style('display', labelVisible ? 'block' : 'none')
       .html(d => d[labelField]);
 
   const image = selection.selectAll('.node').select('.node-image')
-      .attr('transform', `translate(${-svgWidth / 2},${-svgHeight / 2})`)
+      .attr('width', svgWidth)
+      .attr('height', svgHeight)
+      .attr('x', -svgWidth / 2)
+      .attr('y', -svgHeight / 2)
     if (state.showNodeImage) {
       image.html(d => d[state.appearance.nodeImage.field]);
     } else {
