@@ -63,17 +63,47 @@ const nodeSizeScales = [
   {
     name: "small",
     range: [5, 20],
-    unknown: 10, type: "continuous"
+    unknown: 1, type: "continuous"
   },
   {
     name: "medium",
     range: [15, 60],
-    unknown: 20, type: "continuous"
+    unknown: 1, type: "continuous"
   },
   {
     name: "large",
     range: [45, 180],
-    unknown: 40, type: "continuous"
+    unknown: 1, type: "continuous"
+  },
+  {
+    name: "small, potency",
+    range: [20, 5],
+    unknown: 1, type: "continuous"
+  },
+  {
+    name: "medium, potency",
+    range: [60, 15],
+    unknown: 1, type: "continuous"
+  },
+  {
+    name: "large, potency",
+    range: [180, 45],
+    unknown: 1, type: "continuous"
+  },
+  {
+    name: "small, counter",
+    range: [5, 20],
+    unknown: 20, type: "continuous"
+  },
+  {
+    name: "medium, counter",
+    range: [15, 60],
+    unknown: 60, type: "continuous"
+  },
+  {
+    name: "large, counter",
+    range: [45, 180],
+    unknown: 180, type: "continuous"
   }
 ];
 
@@ -136,12 +166,15 @@ function scaleFunction(params, iqr, rangeType) {
   if (scale.hasOwnProperty("domain")) {
     domain.push(...params.domain);
   } else if (iqr !== undefined) {
+    // asymmetric IQR fence
     if (params.scale === "linear") {
-      const ext = (iqr[1] - iqr[0]) / 2;
-      domain.push(iqr[0] - ext, iqr[1] + ext);
+      const lf = (iqr[1] - iqr[0]) * 1.5;
+      const uf = (iqr[2] - iqr[1]) * 1.5;
+      domain.push(iqr[0] - lf, iqr[2] + uf);
     } else if (params.scale === "log") {
-      const ext = Math.sqrt(iqr[1] / iqr[0]);
-      domain.push(iqr[0] / ext, iqr[1] * ext);
+      const lf = (iqr[1] / iqr[0]) ** 1.5;
+      const uf = (iqr[2] / iqr[1]) ** 1.5;
+      domain.push(iqr[0] / lf, iqr[2] * uf);
     }
   }
 
@@ -157,24 +190,39 @@ function scaleFunction(params, iqr, rangeType) {
 
 
 
-const NUM_LIKE_THRESHOLD = 0.5;
 
 function IQR(arr) {
-  // caluculate IQR
-  const nums = arr.filter(e => typeof e === "number");
+  // caluculate IQR and return [Q1, median, Q3]
+  // use min-max if numeric nodes count < 4 or Q1 == Q3
+  const nums = arr.map(e => parseInt(e)).filter(e => !isNaN(e));
   nums.sort((a, b) => a - b);
   const cnt = nums.length;
-  if (cnt < 4 || cnt / arr.length < NUM_LIKE_THRESHOLD) {
-    return null;  // not numeric field
+  if (cnt === 0) { return null; }
+  const mcnt = Math.floor(cnt / 2);
+  if (cnt < 4) { // use min-max
+    const l = nums[0];
+    const u = nums[cnt - 1];
+    const m = cnt % 2 === 1 ? nums[mcnt] : (nums[mcnt - 1] + nums[mcnt]) / 2;
+    return [l, m, u];
   }
-  const lowcnt = Math.floor(cnt / 2);
-  const qcnt = Math.floor(lowcnt / 2);
-  if (lowcnt % 2 === 1) {
-    return [nums[qcnt], nums[nums.length - qcnt - 1]];
+  const qcnt = Math.floor(mcnt / 2);
+  if (cnt % 2 === 1) {
+    if (mcnt % 2 === 1) {
+      return [nums[qcnt], nums[mcnt], nums[mcnt + qcnt + 1]];
+    } else {
+      const l = (nums[qcnt - 1] + nums[qcnt]) / 2;
+      const u = (nums[mcnt + qcnt] + nums[mcnt + qcnt + 1]) / 2;
+      return [l, nums[mcnt], u];
+    }
   } else {
-    const l = (nums[qcnt - 1] + nums[qcnt]) / 2;
-    const u = (nums[nums.length - qcnt - 1] + nums[nums.length - qcnt]) / 2;
-    return [l, u];
+    const m = (nums[mcnt - 1] + nums[mcnt]) / 2;
+    if (mcnt % 2 === 1) {
+      return [nums[qcnt], m, nums[mcnt + qcnt]];
+    } else {
+      const l = (nums[qcnt - 1] + nums[qcnt]) / 2;
+      const u = (nums[mcnt + qcnt - 1] + nums[mcnt + qcnt]) / 2;
+      return [l, m, u];
+    }
   }
 }
 
@@ -182,8 +230,8 @@ function IQR(arr) {
 
 // Default field patterns
 const IMAGE_FIELD_PATTERN = new RegExp("(structure|image|svg)", "i");
-const NUM_FIELD_PATTERN = new RegExp("(IC50|EC50|AC50|%|ratio|^mw$|logp|weight)", "i");
-const CAT_FIELD_PATTERN = new RegExp("(class|category|cluster|group|type)", "i");
+const NUM_FIELD_PATTERN = new RegExp("(IC50|EC50|AC50|%|ratio|^mw$|logp|weight|dist)", "i");
+const CAT_FIELD_PATTERN = new RegExp("(community|comm|class|category|cluster|group|type)", "i");
 
 function fieldType(field, config) {
   if (config.imageFields.includes(field)) {
