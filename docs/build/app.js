@@ -1,11 +1,6 @@
 var app = (function (d3, pako) {
   'use strict';
 
-  function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
-
-  var d3__default = /*#__PURE__*/_interopDefaultLegacy(d3);
-  var pako__default = /*#__PURE__*/_interopDefaultLegacy(pako);
-
   function readFile(file, sizeLimit, blob) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -22,7 +17,7 @@ var app = (function (d3, pako) {
 
 
   function parseJSON(data, compressed) {
-    const text = compressed ? pako__default["default"].inflate(data, {to: 'string'}) : data;
+    const text = compressed ? pako.inflate(data, {to: 'string'}) : data;
     return JSON.parse(text);
   }
 
@@ -66,7 +61,7 @@ var app = (function (d3, pako) {
 
   function downloadJSON(json, name, compress=true) {
     const str = JSON.stringify(json);
-    const data = compress ? pako__default["default"].gzip(str) : str;
+    const data = compress ? pako.gzip(str) : str;
     downloadDataFile(data, `${name}.json${compress ? '.gz' : ''}`);
   }
 
@@ -121,7 +116,7 @@ var app = (function (d3, pako) {
    */
   function formatNum(value, d3format) {
     if (value === undefined || value === null || Number.isNaN(value)) return '';
-    return value == parseFloat(value) ? d3__default["default"].format(d3format)(value) : value;
+    return value == parseFloat(value) ? d3.format(d3format)(value) : value;
   }
 
 
@@ -431,8 +426,8 @@ var app = (function (d3, pako) {
     appendSnapshot, renameSnapshot, deleteSnapshot
   };
 
-  const assetBaseURL = './asset/';
-  const iconBaseURL$1 = './asset/icon/';
+  const assetBaseURL = './assets/';
+  const iconBaseURL$1 = './assets/icons/';
 
 
   function badge(selection) {
@@ -461,12 +456,12 @@ var app = (function (d3, pako) {
       .style('display', 'inline')
       .transition()
         .duration(500)
-        .ease(d3__default["default"].easeLinear)
+        .ease(d3.easeLinear)
         .style("opacity", 1.0)
       .transition()
         .delay(3000)
         .duration(1000)
-        .ease(d3__default["default"].easeLinear)
+        .ease(d3.easeLinear)
         .style("opacity", 0)
         .on('end', function () {
           selection.style('display', 'none');
@@ -688,7 +683,7 @@ var app = (function (d3, pako) {
   function updateChecklistValues(selection, values, keyfunc = d => d) {
     selection.selectAll('input')
       .each(function (d) {
-        d3__default["default"].select(this).property('checked', values.includes(keyfunc(d)));
+        d3.select(this).property('checked', values.includes(keyfunc(d)));
       });
     selection.call(setChecklistValidity, true);  // Clear validity state
   }
@@ -757,7 +752,7 @@ var app = (function (d3, pako) {
           selection.dispatch('change', {bubbles: true});
         })
         .each((d, i, nodes) => {
-          d3__default["default"].select(nodes[i])
+          d3.select(nodes[i])
               .call(shape.colorBar(d.range), d.range, 80, d);
         });
   }
@@ -794,7 +789,7 @@ var app = (function (d3, pako) {
     colorScaleBoxValue, colorScaleBoxItem
   };
 
-  const iconBaseURL = './asset/icon/';
+  const iconBaseURL = './assets/icons/';
 
 
   function buttonBox(selection, label, type) {
@@ -911,7 +906,7 @@ var app = (function (d3, pako) {
     selection.classed('dropdown-item', true)
         .attr('href', '#')
         .on('click', function () {
-          d3__default["default"].select(this).select('input').node().click();
+          d3.select(this).select('input').node().click();
         });
     selection.append('form')
         .style('display', 'none')
@@ -930,7 +925,7 @@ var app = (function (d3, pako) {
   function fileButton(selection, label, accept, icon) {
       selection
           .on('click', event => {
-            d3__default["default"].select(event.currentTarget).select('input').node().click();
+            d3.select(event.currentTarget).select('input').node().click();
           });
       selection.append('form')
           .style('display', 'none')
@@ -1109,7 +1104,7 @@ var app = (function (d3, pako) {
         .classed('align-items-center', true)
         .on('change', () => {
           // avoid update by mousemove on the colorpicker
-          d3__default["default"].event.stopPropagation();
+          d3.event.stopPropagation();
         });
     selection.append('div')
         .classed('form-group', true)
@@ -1239,7 +1234,7 @@ var app = (function (d3, pako) {
 
 
   async function showConfirmDialog(message, selector="confirmd") {
-    const selection = d3__default["default"].select(`#${selector}`);
+    const selection = d3.select(`#${selector}`);
     selection.select('.message').text(message);
     const control = new bootstrap.Modal(document.getElementById(selector));
     control.toggle();
@@ -1312,7 +1307,7 @@ var app = (function (d3, pako) {
 
 
   async function showRenameDialog(name, selector="renamed") {
-    const selection = d3__default["default"].select(`#${selector}`);
+    const selection = d3.select(`#${selector}`);
     selection.select('.name')
         .call(box.updateFormValue, name);
     const control = new bootstrap.Modal(document.getElementById(selector));
@@ -1395,17 +1390,17 @@ var app = (function (d3, pako) {
     }
 
     showTransform() {
-      d3__default["default"].select('#debug-transform')
+      d3.select('#debug-transform')
         .text(JSON.stringify(this.transform));
     }
 
     showFocusArea() {
-      d3__default["default"].select('#debug-focusarea')
+      d3.select('#debug-focusarea')
         .text(JSON.stringify(this.focusArea));
     }
 
     showViewBox() {
-      d3__default["default"].select('#debug-viewbox')
+      d3.select('#debug-viewbox')
         .text(JSON.stringify(this.viewBox));
     }
   }
@@ -1600,9 +1595,9 @@ var app = (function (d3, pako) {
 
     const scaleType = {
       constant: value => range[scale.type === "continuous" ? range.length - 1 : 0],
-      linear: d3scalewrapper(d3__default["default"].scaleLinear().domain(domain).range(range).clamp(true), params, unknown),
-      log: d3scalewrapper(d3__default["default"].scaleLog().domain(domain).range(range).clamp(true), params, unknown),
-      categorical: d3scalewrapper(d3__default["default"].scaleOrdinal().range(range), params, unknown)
+      linear: d3scalewrapper(d3.scaleLinear().domain(domain).range(range).clamp(true), params, unknown),
+      log: d3scalewrapper(d3.scaleLog().domain(domain).range(range).clamp(true), params, unknown),
+      categorical: d3scalewrapper(d3.scaleOrdinal().range(range), params, unknown)
     };
 
     return scaleType[params.hasOwnProperty("field") ? params.scale : "constant"];
@@ -1673,7 +1668,7 @@ var app = (function (d3, pako) {
 
   function isD3Format(notation) {
     try {
-      d3__default["default"].format(notation);
+      d3.format(notation);
     } catch (err) {
       return false;
     }
@@ -1880,8 +1875,6 @@ var app = (function (d3, pako) {
       this.numericEdgeFields.forEach(e => {
         this.edgeIQR[e] = scale.IQR(this.fedges.map(n => n[e]));
       });
-
-      console.log(this.edgeIQR);
 
       this.dispatch("setForce");
       this.dispatch("updateControlBox");  // filter panes
@@ -2184,7 +2177,7 @@ var app = (function (d3, pako) {
   };
 
   function dragListener(selection, state) {
-    return d3__default["default"].drag()
+    return d3.drag()
       .on('start', () => {
         state.setStateChanged(true);
       })
@@ -2208,7 +2201,7 @@ var app = (function (d3, pako) {
           event.subject.x = event.x;
           event.subject.y = event.y;
           const n = event.subject.__index;
-          d3__default["default"].selectAll(".node")
+          d3.selectAll(".node")
             .filter(d => d.__index == n)
             .call(component.updateNodeCoords);
           selection.selectAll(".link")
@@ -2223,7 +2216,7 @@ var app = (function (d3, pako) {
     selection
       .on("dblclick.zoom", null)  // disable double-click zoom
       .on('.drag', null);  // disable rectSelect
-    return d3__default["default"].zoom()
+    return d3.zoom()
       .on('start', () => {
         state.setStateChanged(true);
       })
@@ -2267,7 +2260,7 @@ var app = (function (d3, pako) {
       .each(d => {
         if (d.__selected) { p.add(d.__index); }
       });
-    return d3__default["default"].drag()
+    return d3.drag()
       .on('start', event => {
         state.setStateChanged(true);
         origin.x = event.x;
@@ -2318,7 +2311,7 @@ var app = (function (d3, pako) {
             state.nodes.forEach((e, i) => {
               state.nodes[i].__selected = false;
             });
-            const n = d3__default["default"].select(event.currentTarget).datum().__index;
+            const n = d3.select(event.currentTarget).datum().__index;
             state.nodes[n].__selected = true;
             selection.selectAll(".node")
               .call(component.updateNodeSelection);
@@ -2333,7 +2326,7 @@ var app = (function (d3, pako) {
           .on('touchmove', event => { event.preventDefault(); })
           .on('click.select', event => {
             event.stopPropagation();
-            const n = d3__default["default"].select(event.currentTarget).datum().__index;
+            const n = d3.select(event.currentTarget).datum().__index;
             state.nodes[n].__selected = state.nodes[n].__selected ? false : true;
             selection.selectAll(".node")
               .call(component.updateNodeSelection);
@@ -2397,8 +2390,8 @@ var app = (function (d3, pako) {
     state.register("updateZoom", () => {
       const tf = state.transform;
       selection.call(
-        d3__default["default"].zoom().transform,
-        d3__default["default"].zoomIdentity.translate(tf.x, tf.y).scale(tf.k)
+        d3.zoom().transform,
+        d3.zoomIdentity.translate(tf.x, tf.y).scale(tf.k)
       );
     });
     // Update interaction events
@@ -2417,46 +2410,46 @@ var app = (function (d3, pako) {
   const forceParam = {
     dense: {
       name: 'Dense',
-      force: d3__default["default"].forceSimulation()
-        .force('link', d3__default["default"].forceLink().id(d => d.__index).distance(60).strength(1))
+      force: d3.forceSimulation()
+        .force('link', d3.forceLink().id(d => d.__index).distance(60).strength(1))
         .force('charge',
-          d3__default["default"].forceManyBody().strength(-600).distanceMin(15).distanceMax(720))
-        .force('collide', d3__default["default"].forceCollide().radius(90))
-        .force('x', d3__default["default"].forceX().strength(0.002))
-        .force('y', d3__default["default"].forceY().strength(0.002))
+          d3.forceManyBody().strength(-600).distanceMin(15).distanceMax(720))
+        .force('collide', d3.forceCollide().radius(90))
+        .force('x', d3.forceX().strength(0.002))
+        .force('y', d3.forceY().strength(0.002))
     },
     moderate: {
       name: 'Moderate',
-      force: d3__default["default"].forceSimulation()
-        .force('link', d3__default["default"].forceLink().id(d => d.__index).distance(60).strength(1.3))
+      force: d3.forceSimulation()
+        .force('link', d3.forceLink().id(d => d.__index).distance(60).strength(1.3))
         .force('charge',
-          d3__default["default"].forceManyBody().strength(-2000).distanceMin(15).distanceMax(1200))
-        .force('collide', d3__default["default"].forceCollide().radius(90))
-        .force('x', d3__default["default"].forceX().strength(0.005))
-        .force('y', d3__default["default"].forceY().strength(0.005))
+          d3.forceManyBody().strength(-2000).distanceMin(15).distanceMax(1200))
+        .force('collide', d3.forceCollide().radius(90))
+        .force('x', d3.forceX().strength(0.005))
+        .force('y', d3.forceY().strength(0.005))
     },
     sparse: {
       name: 'Sparse',
-      force: d3__default["default"].forceSimulation()
-        .force('link', d3__default["default"].forceLink().id(d => d.__index).distance(60).strength(2))
+      force: d3.forceSimulation()
+        .force('link', d3.forceLink().id(d => d.__index).distance(60).strength(2))
         .force('charge',
-          d3__default["default"].forceManyBody().strength(-6000).distanceMin(15).distanceMax(3600))
-        .force('collide', d3__default["default"].forceCollide().radius(90))
-        .force('x', d3__default["default"].forceX().strength(0.01))
-        .force('y', d3__default["default"].forceY().strength(0.01))
+          d3.forceManyBody().strength(-6000).distanceMin(15).distanceMax(3600))
+        .force('collide', d3.forceCollide().radius(90))
+        .force('x', d3.forceX().strength(0.01))
+        .force('y', d3.forceY().strength(0.01))
     }
   };
 
 
   function forceSimulation(type, width, height) {
     return forceParam[type].force
-      .force('center', d3__default["default"].forceCenter(width / 2, height / 2))
+      .force('center', d3.forceCenter(width / 2, height / 2))
       .stop();
   }
 
 
   function forceDragListener(selection, simulation, state) {
-    return d3__default["default"].drag()
+    return d3.drag()
       .on('start', event => {
         state.setStateChanged(true);
         if (!event.active) state.dispatch("relax");
@@ -2613,7 +2606,7 @@ var app = (function (d3, pako) {
     selection.select('.stick')
         .call(box.updateCheckBox, !state.forceActive)
         .on('change', event => {
-          const value = box.checkBoxValue(d3__default["default"].select(event.currentTarget));
+          const value = box.checkBoxValue(d3.select(event.currentTarget));
           selection.select('.temperature')
               .style('background-color', value ? '#a3e4d7' : '#e9ecef')
             .select('.progress-bar')
@@ -2624,7 +2617,7 @@ var app = (function (d3, pako) {
     selection.select('.forceparam')
         .call(lbox.updateSelectBoxValue, state.config.forceParam)
         .on('change', event => {
-          state.config.forceParam = lbox.selectBoxValue(d3__default["default"].select(event.currentTarget));
+          state.config.forceParam = lbox.selectBoxValue(d3.select(event.currentTarget));
           state.updateFilter();
         });
     selection.select('.perturb')
@@ -2677,10 +2670,10 @@ var app = (function (d3, pako) {
       .append("div")
         .classed("filter", true)
       .each((d, i, nodes) => {
-        d3__default["default"].select(nodes[i])
+        d3.select(nodes[i])
           .call(filterComponent, d, i, state)
           .on('change', event => {
-            state.filters[i] = filterValue(d3__default["default"].select(event.currentTarget));
+            state.filters[i] = filterValue(d3.select(event.currentTarget));
             state.updateFilter();
           })
           .on('remove', async event => {
@@ -2896,21 +2889,21 @@ var app = (function (d3, pako) {
         .call(lbox.updateSelectBoxValue, state.appearance.nodeColor.field)
         .on('change', event => {
           state.setAppearance(
-            "nodeColor", "field", lbox.selectBoxValue(d3__default["default"].select(event.currentTarget)));
+            "nodeColor", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
         });
     selection.select('.colorrange')
         .call(lbox.updateColorScaleItems, colorRange)
         .call(lbox.updateColorScaleBox, state.appearance.nodeColor.rangePreset)
         .on('change', event => {
           state.setAppearance(
-            "nodeColor", "rangePreset", lbox.colorScaleBoxValue(d3__default["default"].select(event.currentTarget)));
+            "nodeColor", "rangePreset", lbox.colorScaleBoxValue(d3.select(event.currentTarget)));
         });
     selection.select('.colorscale')
         .call(lbox.updateSelectBoxOptions, colorScale)
         .call(lbox.updateSelectBoxValue, state.appearance.nodeColor.scale)
         .on('change', event => {
           state.setAppearance(
-            "nodeColor", "scale", lbox.selectBoxValue(d3__default["default"].select(event.currentTarget)));
+            "nodeColor", "scale", lbox.selectBoxValue(d3.select(event.currentTarget)));
         });
 
     selection.select('.sizefield')
@@ -2918,21 +2911,21 @@ var app = (function (d3, pako) {
         .call(lbox.updateSelectBoxValue, state.appearance.nodeSize.field)
         .on('change', event => {
           state.setAppearance(
-            "nodeSize", "field", lbox.selectBoxValue(d3__default["default"].select(event.currentTarget)));
+            "nodeSize", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
         });
     selection.select('.sizerange')
         .call(lbox.updateSelectBoxOptions, scale.nodeSizeScales.map(e => e.name))
         .call(lbox.updateSelectBoxValue, state.appearance.nodeSize.rangePreset)
         .on('change', event => {
           state.setAppearance(
-            "nodeSize", "rangePreset", lbox.selectBoxValue(d3__default["default"].select(event.currentTarget)));
+            "nodeSize", "rangePreset", lbox.selectBoxValue(d3.select(event.currentTarget)));
         });
     selection.select('.sizescale')
         .call(lbox.updateSelectBoxOptions, ["constant", "linear", "log"])
         .call(lbox.updateSelectBoxValue, state.appearance.nodeSize.scale)
         .on('change', event => {
           state.setAppearance(
-            "nodeSize", "scale", lbox.selectBoxValue(d3__default["default"].select(event.currentTarget)));
+            "nodeSize", "scale", lbox.selectBoxValue(d3.select(event.currentTarget)));
         });
 
     const labelFields = state.nodeFields.filter(e => !state.imageNodeFields.includes(e));
@@ -2940,20 +2933,20 @@ var app = (function (d3, pako) {
         .call(box.updateCheckBox, state.appearance.nodeLabel.visible)
         .on('change', event => {
           state.setAppearance(
-            "nodeLabel", "visible", box.checkBoxValue(d3__default["default"].select(event.currentTarget)));
+            "nodeLabel", "visible", box.checkBoxValue(d3.select(event.currentTarget)));
         });
     selection.select('.labelfield')
         .call(lbox.updateSelectBoxOptions, labelFields, undefined, undefined, lnull)
         .call(lbox.updateSelectBoxValue, state.appearance.nodeLabel.field)
         .on('change', event => {
           state.setAppearance(
-            "nodeLabel", "field", lbox.selectBoxValue(d3__default["default"].select(event.currentTarget)));
+            "nodeLabel", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
         });
     selection.select('.labelsize')
         .call(box.updateFormValue, state.appearance.nodeLabel.size)
         .on('change', event => {
           state.setAppearance(
-            "nodeLabel", "size", box.formValue(d3__default["default"].select(event.currentTarget)));
+            "nodeLabel", "size", box.formValue(d3.select(event.currentTarget)));
         });
 
     const imageFields = state.nodeFields.filter(e => state.imageNodeFields.includes(e));
@@ -2962,12 +2955,12 @@ var app = (function (d3, pako) {
         .call(lbox.updateSelectBoxValue, state.appearance.nodeImage.field)
         .on('change', event => {
           state.setAppearance(
-            "nodeImage", "field", lbox.selectBoxValue(d3__default["default"].select(event.currentTarget)));
+            "nodeImage", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
         });
     selection.select('.shownodeimage')
         .call(box.updateCheckBox, state.config.alwaysShowNodeImage)
         .on('change', event => {
-          state.config.alwaysShowNodeImage = box.checkBoxValue(d3__default["default"].select(event.currentTarget));
+          state.config.alwaysShowNodeImage = box.checkBoxValue(d3.select(event.currentTarget));
           state.updateVisibility();
         });
   }
@@ -3090,21 +3083,21 @@ var app = (function (d3, pako) {
         .call(lbox.updateSelectBoxValue, state.appearance.edgeColor.field)
         .on('change', event => {
           state.setAppearance(
-            "edgeColor", "field", lbox.selectBoxValue(d3__default["default"].select(event.currentTarget)));
+            "edgeColor", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
         });
     selection.select('.colorrange')
         .call(lbox.updateColorScaleItems, colorRange)
         .call(lbox.updateColorScaleBox, state.appearance.edgeColor.rangePreset)
         .on('change', event => {
           state.setAppearance(
-            "edgeColor", "rangePreset", lbox.colorScaleBoxValue(d3__default["default"].select(event.currentTarget)));
+            "edgeColor", "rangePreset", lbox.colorScaleBoxValue(d3.select(event.currentTarget)));
         });
     selection.select('.colorscale')
         .call(lbox.updateSelectBoxOptions, colorScale)
         .call(lbox.updateSelectBoxValue, state.appearance.edgeColor.scale)
         .on('change', event => {
           state.setAppearance(
-            "edgeColor", "scale", lbox.selectBoxValue(d3__default["default"].select(event.currentTarget)));
+            "edgeColor", "scale", lbox.selectBoxValue(d3.select(event.currentTarget)));
         });
 
     selection.select('.widthfield')
@@ -3112,21 +3105,21 @@ var app = (function (d3, pako) {
         .call(lbox.updateSelectBoxValue, state.appearance.edgeWidth.field)
         .on('change', event => {
           state.setAppearance(
-            "edgeWidth", "field", lbox.selectBoxValue(d3__default["default"].select(event.currentTarget)));
+            "edgeWidth", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
         });
     selection.select('.widthrange')
         .call(lbox.updateSelectBoxOptions, scale.edgeWidthScales.map(e => e.name))
         .call(lbox.updateSelectBoxValue, state.appearance.edgeWidth.rangePreset)
         .on('change', event => {
           state.setAppearance(
-            "edgeWidth", "rangePreset", lbox.selectBoxValue(d3__default["default"].select(event.currentTarget)));
+            "edgeWidth", "rangePreset", lbox.selectBoxValue(d3.select(event.currentTarget)));
         });
     selection.select('.widthscale')
         .call(lbox.updateSelectBoxOptions, ["constant", "linear", "log"])
         .call(lbox.updateSelectBoxValue, state.appearance.edgeWidth.scale)
         .on('change', event => {
           state.setAppearance(
-            "edgeWidth", "scale", lbox.selectBoxValue(d3__default["default"].select(event.currentTarget)));
+            "edgeWidth", "scale", lbox.selectBoxValue(d3.select(event.currentTarget)));
         });
 
     const labelFields = state.edgeFields.filter(e => !["source", "target"].includes(e));
@@ -3134,26 +3127,26 @@ var app = (function (d3, pako) {
         .call(box.updateCheckBox, state.appearance.edgeLabel.visible)
         .on('change', event => {
           state.setAppearance(
-            "edgeLabel", "visible", box.checkBoxValue(d3__default["default"].select(event.currentTarget)));
+            "edgeLabel", "visible", box.checkBoxValue(d3.select(event.currentTarget)));
         });
     selection.select('.labelfield')
         .call(lbox.updateSelectBoxOptions, labelFields, undefined, undefined, lnull)
         .call(lbox.updateSelectBoxValue, state.appearance.edgeLabel.field)
         .on('change', event => {
           state.setAppearance(
-            "edgeLabel", "field", lbox.selectBoxValue(d3__default["default"].select(event.currentTarget)));
+            "edgeLabel", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
         });
     selection.select('.labelsize')
         .call(box.updateFormValue, state.appearance.edgeLabel.size)
         .on('change', event => {
           state.setAppearance(
-            "edgeLabel", "size", box.formValue(d3__default["default"].select(event.currentTarget)));
+            "edgeLabel", "size", box.formValue(d3.select(event.currentTarget)));
         });
 
     selection.select('.showedge')
         .call(box.updateCheckBox, state.config.alwaysShowEdge)
         .on('change', event => {
-          state.config.alwaysShowEdge = box.checkBoxValue(d3__default["default"].select(event.currentTarget));
+          state.config.alwaysShowEdge = box.checkBoxValue(d3.select(event.currentTarget));
           state.updateVisibility();
         });
   }
@@ -3211,7 +3204,7 @@ var app = (function (d3, pako) {
     const fncnt = state.fnodes.length;
     const fecnt = state.fedges.length;
     const maxedges = fncnt * (fncnt - 1) / 2;
-    const logd = d3__default["default"].format('.2f')(Math.log10(fecnt / maxedges));
+    const logd = d3.format('.2f')(Math.log10(fecnt / maxedges));
 
     selection.select('.nodecount')
         .text(`${fncnt}/${ncnt}`);
@@ -3392,7 +3385,7 @@ var app = (function (d3, pako) {
         .call(lbox.updateSelectBoxOptions, sessions, d => d.id, d => d.name)
         .call(lbox.updateSelectBoxValue, currentID)
         .on('change', async event => {
-          const newID = lbox.selectBoxValue(d3__default["default"].select(event.currentTarget));
+          const newID = lbox.selectBoxValue(d3.select(event.currentTarget));
           await idb.putConfig("currentSession", newID);
           const session = await idb.getSession(newID);
           // establish state
@@ -3493,7 +3486,7 @@ var app = (function (d3, pako) {
         .call(lbox.updateSelectBoxOptions, state.snapshots, (d, i) => i, d => d.name)
         .call(lbox.updateSelectBoxValue, state.snapshotIndex)
         .on('change', event => {
-          const i = lbox.selectBoxValueIndex(d3__default["default"].select(event.currentTarget));
+          const i = lbox.selectBoxValueIndex(d3.select(event.currentTarget));
           state.updateSnapshot(i);
         })
       .select("select")
@@ -3571,13 +3564,13 @@ var app = (function (d3, pako) {
   function setState(data) {
     // set view frame size (depends on browser)
     function setFrameSize() {
-      const width = d3__default["default"].select(".container-fluid").property("offsetWidth");
-      const height = d3__default["default"].select(".container-fluid").property("offsetHeight");
-      const headerH = d3__default["default"].select("#header").property("offsetHeight");
-      const tabH = d3__default["default"].select("#control-tab").property("offsetHeight");
-      const controlW = d3__default["default"].select("#control").property("offsetWidth");
-      d3__default["default"].select("#workspace").style("height", `${height - headerH - 15}px`);
-      d3__default["default"].select(".tab-content").style("max-height", `${height - headerH - tabH - 25}px`);
+      const width = d3.select(".container-fluid").property("offsetWidth");
+      const height = d3.select(".container-fluid").property("offsetHeight");
+      const headerH = d3.select("#header").property("offsetHeight");
+      const tabH = d3.select("#control-tab").property("offsetHeight");
+      const controlW = d3.select("#control").property("offsetWidth");
+      d3.select("#workspace").style("height", `${height - headerH - 15}px`);
+      d3.select(".tab-content").style("max-height", `${height - headerH - tabH - 25}px`);
       return [width - controlW - 15, height - headerH - 15]
     }
 
@@ -3585,16 +3578,16 @@ var app = (function (d3, pako) {
     const state = new NetworkState(data, fsize[0], fsize[1]);
 
     // Title
-    d3__default["default"].select('title').text(state.sessionName);
+    d3.select('title').text(state.sessionName);
 
     // Update contents
-    d3__default["default"].select('#header')
+    d3.select('#header')
         .call(updateHeaderMenu, state);
-    d3__default["default"].select("#view")
+    d3.select("#view")
         .call(component.setViewCallbacks, state)
         .call(force.setForce, state)
         .call(interaction.setInteraction, state);
-    d3__default["default"].select('#control')
+    d3.select('#control')
         .call(control.updateControlBox, state);
 
     // Resize window
@@ -3625,23 +3618,23 @@ var app = (function (d3, pako) {
     // Check web browser compatibility
     const err = misc.compatibility();
     if (err) {
-      d3__default["default"].select('body')
+      d3.select('body')
         .style('color', '#ff0000')
         .text(err);
       return;
     }
 
     // Render contents
-    d3__default["default"].select('#header').call(headerMenu);
-    d3__default["default"].select('#frame')
+    d3.select('#header').call(headerMenu);
+    d3.select('#frame')
       .append('svg')
         .attr("id", "view")
         .call(component.viewComponent)
         .call(interaction.interactionComponent);
-    d3__default["default"].select('#control')
+    d3.select('#control')
         .call(control.controlBox);
 
-    const dialogs = d3__default["default"].select('#dialogs');
+    const dialogs = d3.select('#dialogs');
     dialogs.append('div')
         .attr("id", "renamed")
         .call(modal.renameDialog);
