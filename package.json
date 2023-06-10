@@ -4,7 +4,7 @@
   "homepage": "https://github.com/mojaie/similarity-network",
   "author": "Seiji Matsuoka",
   "license": "MIT",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "repository": "https://github.com/mojaie/similarity-network",
   "main": "main.js",
   "type": "module",
