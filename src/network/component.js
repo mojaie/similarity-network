@@ -102,7 +102,7 @@ function updateEdgeAttrs(selection, state) {
   selection.selectAll('.link').select('.edge-label')
     .attr('font-size', labelSize)
     .attr('visibility', labelVisible ? 'inherit' : 'hidden')
-    .style('fill', d => d.labelColor || "#cccccc")
+    .style('fill', d => d.labelColor || "#666666")
     .text(d => d[labelField]);
 }
 

@@ -122,6 +122,21 @@ const edgeWidthScales = [
     name: "thick",
     range: [8, 40],
     unknown: 8, type: "continuous"
+  },
+  {
+    name: "thin, inverse",
+    range: [10, 2],
+    unknown: 2, type: "continuous"
+  },
+  {
+    name: "medium, inverse",
+    range: [20, 4],
+    unknown: 4, type: "continuous"
+  },
+  {
+    name: "thick, inverse",
+    range: [40, 8],
+    unknown: 8, type: "continuous"
   }
 ];
 
@@ -194,7 +209,7 @@ function scaleFunction(params, iqr, rangeType) {
 function IQR(arr) {
   // caluculate IQR and return [Q1, median, Q3]
   // use min-max if numeric nodes count < 4 or Q1 == Q3
-  const nums = arr.map(e => parseInt(e)).filter(e => !isNaN(e));
+  const nums = arr.map(e => parseFloat(e)).filter(e => !isNaN(e));
   nums.sort((a, b) => a - b);
   const cnt = nums.length;
   if (cnt === 0) { return null; }
