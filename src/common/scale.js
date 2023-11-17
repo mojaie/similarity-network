@@ -20,29 +20,9 @@ const colorScales = [
     range: ['#778899', '#f0e68c'],
     unknown: '#f0f0f0', type: "continuous"
   },
-  {
+{
     name: "gray",
     range: ['#778899', '#cccccc'],
-    unknown: '#f0f0f0', type: "continuous"
-  },
-  {
-    name: "igreen",
-    range: ['#98fb98', '#778899'],
-    unknown: '#f0f0f0', type: "continuous"
-  },
-  {
-    name: "iblue",
-    range: ['#7fffd4', '#778899'],
-    unknown: '#f0f0f0', type: "continuous"
-  },
-  {
-    name: "iyellow",
-    range: ['#f0e68c', '#778899'],
-    unknown: '#f0f0f0', type: "continuous"
-  },
-  {
-    name: "igray",
-    range: ['#cccccc', '#778899'],
     unknown: '#f0f0f0', type: "continuous"
   },
   {
@@ -61,81 +41,51 @@ const colorScales = [
 
 const nodeSizeScales = [
   {
-    name: "small",
+    name: "5-20px",
     range: [5, 20],
     unknown: 1, type: "continuous"
   },
   {
-    name: "medium",
+    name: "10-40px",
+    range: [10, 40],
+    unknown: 1, type: "continuous"
+  },
+  {
+    name: "15-60px",
     range: [15, 60],
     unknown: 1, type: "continuous"
   },
   {
-    name: "large",
-    range: [45, 180],
+    name: "20-80px",
+    range: [20, 80],
     unknown: 1, type: "continuous"
   },
   {
-    name: "small, potency",
-    range: [20, 5],
+    name: "30-120px",
+    range: [30, 120],
     unknown: 1, type: "continuous"
   },
   {
-    name: "medium, potency",
-    range: [60, 15],
+    name: "40-160px",
+    range: [40, 160],
     unknown: 1, type: "continuous"
-  },
-  {
-    name: "large, potency",
-    range: [180, 45],
-    unknown: 1, type: "continuous"
-  },
-  {
-    name: "small, counter",
-    range: [5, 20],
-    unknown: 20, type: "continuous"
-  },
-  {
-    name: "medium, counter",
-    range: [15, 60],
-    unknown: 60, type: "continuous"
-  },
-  {
-    name: "large, counter",
-    range: [45, 180],
-    unknown: 180, type: "continuous"
   }
 ];
 
 const edgeWidthScales = [
   {
-    name: "thin",
+    name: "2-10px",
     range: [2, 10],
     unknown: 2, type: "continuous"
   },
   {
-    name: "medium",
+    name: "4-20px",
     range: [4, 20],
     unknown: 4, type: "continuous"
   },
   {
-    name: "thick",
+    name: "8-40px",
     range: [8, 40],
-    unknown: 8, type: "continuous"
-  },
-  {
-    name: "thin, inverse",
-    range: [10, 2],
-    unknown: 2, type: "continuous"
-  },
-  {
-    name: "medium, inverse",
-    range: [20, 4],
-    unknown: 4, type: "continuous"
-  },
-  {
-    name: "thick, inverse",
-    range: [40, 8],
     unknown: 8, type: "continuous"
   }
 ];
@@ -205,6 +155,15 @@ function scaleFunction(params, iqr, rangeType) {
 
 
 
+/*
+fixed value range
+
+suggest range
+0-100 (min-max)
+25-75 (IQR)
+
+use d3.quantile
+*/
 
 function IQR(arr) {
   // caluculate IQR and return [Q1, median, Q3]
@@ -244,9 +203,11 @@ function IQR(arr) {
 
 
 // Default field patterns
-const IMAGE_FIELD_PATTERN = new RegExp("(structure|image|svg)", "i");
-const NUM_FIELD_PATTERN = new RegExp("(IC50|EC50|AC50|%|ratio|^mw$|logp|weight|dist)", "i");
-const CAT_FIELD_PATTERN = new RegExp("(community|comm|class|category|cluster|group|type)", "i");
+const IMAGE_FIELD_PATTERN = new RegExp("(structure|image|svg|^i_)", "i");
+const NUM_FIELD_PATTERN = new RegExp(
+  "(IC50|EC50|AC50|%|ratio|^mw$|logp|weight|dist|score|value|^n_)", "i");
+const CAT_FIELD_PATTERN = new RegExp(
+  "(community|comm|class|category|cluster|group|type|label|flag|^is_|^has_|^c_)", "i");
 
 function fieldType(field, config) {
   if (config.imageFields.includes(field)) {

@@ -91,11 +91,11 @@ export default class NetworkState extends TransformState {
     };
     this.appearance = {
       nodeColor: {rangePreset: 'green', scale: 'constant'},
-      nodeSize: {rangePreset: 'medium', scale: 'constant'},
+      nodeSize: {rangePreset: '10-40px', scale: 'constant'},
       nodeLabel: {size: 20, visible: false},
       nodeImage: {size: 180},
       edgeColor: {rangePreset: 'gray', scale: 'constant'},
-      edgeWidth: {rangePreset: 'medium', scale: 'constant'},
+      edgeWidth: {rangePreset: '4-20px', scale: 'constant'},
       edgeLabel: {size: 12, visible: false}
     };
     this.snapshots = session.snapshots || [];
