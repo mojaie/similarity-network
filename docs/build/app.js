@@ -1712,8 +1712,10 @@ var app = (function (d3, pako) {
       };
 
       // Initialize snapshot
-      this.name = "default";
-      this.filters = [];
+      this.name = "default"; // not shown
+      this.filters = session.filters || [
+        {field: 'edge.weight', operator: '>=', value: 0.7, groups: []}
+      ];
       this.config = {
         numericFields: [],
         categoricalFields: [],
@@ -1724,6 +1726,9 @@ var app = (function (d3, pako) {
         alwaysShowEdge: false,
         forceParam: 'dense'
       };
+      if (session.hasOwnProperty("config")) {
+        Object.assign(this.config, session.config);
+      }
       this.appearance = {
         nodeColor: {rangePreset: 'green', scale: 'constant'},
         nodeSize: {rangePreset: '10-40px', scale: 'constant'},
@@ -1733,6 +1738,9 @@ var app = (function (d3, pako) {
         edgeWidth: {rangePreset: '4-20px', scale: 'constant'},
         edgeLabel: {size: 12, visible: false}
       };
+      if (session.hasOwnProperty("appearance")) {
+        Object.assign(this.appearance, session.appearance);
+      }
       this.snapshots = session.snapshots || [];
       this.snapshotIndex = this.snapshots.length - 1;
     }

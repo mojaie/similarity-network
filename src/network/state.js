@@ -77,8 +77,10 @@ export default class NetworkState extends TransformState {
     };
 
     // Initialize snapshot
-    this.name = "default";
-    this.filters = [];
+    this.name = "default"; // not shown
+    this.filters = session.filters || [
+      {field: 'edge.weight', operator: '>=', value: 0.7, groups: []}
+    ];
     this.config = {
       numericFields: [],
       categoricalFields: [],
@@ -89,6 +91,9 @@ export default class NetworkState extends TransformState {
       alwaysShowEdge: false,
       forceParam: 'dense'
     };
+    if (session.hasOwnProperty("config")) {
+      Object.assign(this.config, session.config)
+    }
     this.appearance = {
       nodeColor: {rangePreset: 'green', scale: 'constant'},
       nodeSize: {rangePreset: '10-40px', scale: 'constant'},
@@ -98,6 +103,9 @@ export default class NetworkState extends TransformState {
       edgeWidth: {rangePreset: '4-20px', scale: 'constant'},
       edgeLabel: {size: 12, visible: false}
     };
+    if (session.hasOwnProperty("appearance")) {
+      Object.assign(this.appearance, session.appearance)
+    }
     this.snapshots = session.snapshots || [];
     this.snapshotIndex = this.snapshots.length - 1;
   }
