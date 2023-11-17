@@ -738,7 +738,7 @@ var app = (function (d3, pako) {
   function updateColorScaleItems(selection, items) {
     const listitems = selection.select('.dropdown-menu')
       .selectAll('li')
-        .data(items, d => d);
+        .data(items, d => d.name);
     listitems.exit().remove();
     listitems.enter()
       .append('li')
@@ -748,7 +748,7 @@ var app = (function (d3, pako) {
         .attr('href', '#')
         .attr('title', d => d.name)
         .on('click', (event, d) => {
-          selection.call(setSelectedColorScale, d);
+          selection.call(updateColorScaleBox, d);
           selection.dispatch('change', {bubbles: true});
         })
         .each((d, i, nodes) => {
@@ -757,19 +757,12 @@ var app = (function (d3, pako) {
         });
   }
 
-  function setSelectedColorScale(selection, item) {
+  function updateColorScaleBox(selection, item) {
     const selected = selection.select('.selected');
     selected.selectAll('svg').remove();
     selected.datum(item);  // Bind selected item record
     selected
         .call(shape.colorBar(item.range), item.range, 80, item.name);
-  }
-
-  function updateColorScaleBox(selection, key) {
-    const data = selection.select('.dropdown-menu')
-      .selectAll('li').data();
-    const item = data.find(e => e.name === key);
-    selection.call(setSelectedColorScale, item);
   }
 
   function colorScaleBoxItem(selection) {
@@ -1074,6 +1067,7 @@ var app = (function (d3, pako) {
         .classed('form-control', true)
         .classed('form-control-sm', true)
         .attr('type', 'number')
+        .attr('required', 'required')
         .on('input', function () {
           const valid = formValid(selection);
           selection.call(setValidity, valid);
@@ -1093,6 +1087,73 @@ var app = (function (d3, pako) {
         .dispatch('input', {bubbles: true});
   }
 
+
+  function domainBox(selection, label) {
+    selection
+        .classed('row', true)
+        .classed('align-items-center', true)
+      .append('div')
+        .classed('col-form-label', true)
+        .classed('col-form-label-sm', true)
+        .text(label);
+
+    const minBox = selection.append('div');
+    minBox.append('label').text('min');
+    minBox.append('input').classed('min', true);
+
+    const maxBox = selection.append('div');
+    maxBox.append('label').text('max');
+    maxBox.append('input').classed('max', true);
+
+    selection.selectAll('div')
+        .classed('form-group', true)
+        .classed('col-4', true)
+        .classed('px-1', true)
+        .classed('mb-0', true);
+
+    selection.selectAll('label')
+        .classed('col-form-label', true)
+        .classed('col-form-label-sm', true)
+        .classed('py-0', true);
+
+    selection.selectAll('input')
+        .classed('form-control', true)
+        .classed('form-control-sm', true)
+        .attr('type', 'number')
+        .attr('step', 0.01)  // IQRAsymFence digits
+        .on('input', function () {
+          const minvalid = selection.select('.min').node().checkValidity();
+          const maxvalid = selection.select('.max').node().checkValidity();
+          selection.call(setDomainValidity, minvalid, maxvalid);
+        });
+    selection.append('div')
+        .classed('col-4', true);
+    selection.append('div')
+        .call(badge$1.invalidFeedback)
+        .classed('col-8', true);
+  }
+
+  function updateDomainValues(selection, range) {
+    if (range === null) { return; }
+    selection.select('.min').property('value', range[0]);
+    selection.select('.max').property('value', range[1]);
+  }
+
+  function domainValues(selection) {
+    return [
+      selection.select('.min').property('value'),
+      selection.select('.max').property('value')
+    ];
+  }
+
+  function setDomainValidity(selection, minvalid, maxvalid) {
+    selection.select('.invalid-feedback')
+        .style('display', minvalid & maxvalid ? 'none': 'inherit');
+    selection.select('.min')
+        .style('background-color', minvalid ? null : '#ffcccc');
+    selection.select('.max')
+        .style('background-color', maxvalid ? null : '#ffcccc');
+  }
 
   /**
    * Render color scale box components
@@ -1175,6 +1236,7 @@ var app = (function (d3, pako) {
     updateFormValue, formValue, formValid, setValidity,
     textBox, readonlyBox, updateReadonlyValue, readonlyValue,
     numberBox, updateNumberRange,
+    domainBox, updateDomainValues, domainValues, setDomainValidity, 
     checkBox, updateCheckBox, checkBoxValue,
     colorBox,
     fileInputBox, clearFileInput, fileInputValue, fileInputValid
@@ -1493,17 +1555,14 @@ var app = (function (d3, pako) {
 
 
 
-  function d3scalewrapper(d3func, params, unknown) {
+  function d3scalewrapper(d3func, isNumeric, unknown) {
     return d => {
       // Sanitize
       if (d === '' || typeof d === 'undefined' || d === null) {
         return unknown;  // invalid values
       }
-      if (['linear', 'log'].includes(params.scale) && parseFloat(d) != d) {
+      if (isNumeric && parseFloat(d) != d) {
         return unknown;  // texts
-      }
-      if (params.scale === 'log' && d <= 0) {
-        return unknown;  // negative values in log scale
       }
       // Apply function
       const result = d3func(d);
@@ -1515,89 +1574,27 @@ var app = (function (d3, pako) {
       return result;
     };
   }
-
-  function scaleFunction(params, iqr, rangeType) {
+  function scaleFunction(rangeType, appr) {
     const rangeMap = {
       color: colorScales,
       size: nodeSizeScales,
       width: edgeWidthScales
     };
-    const scale = rangeMap[rangeType].find(e => e.name === params.rangePreset);
-    const range = scale.range;
-    const unknown = scale.unknown;
-
-    // extrapolate 0-100% range domain by IQR
-    const domain = [];
-    if (scale.hasOwnProperty("domain")) {
-      domain.push(...params.domain);
-    } else if (iqr !== undefined) {
-      // asymmetric IQR fence
-      if (params.scale === "linear") {
-        const lf = (iqr[1] - iqr[0]) * 1.5;
-        const uf = (iqr[2] - iqr[1]) * 1.5;
-        domain.push(iqr[0] - lf, iqr[2] + uf);
-      } else if (params.scale === "log") {
-        const lf = (iqr[1] / iqr[0]) ** 1.5;
-        const uf = (iqr[2] / iqr[1]) ** 1.5;
-        domain.push(iqr[0] / lf, iqr[2] * uf);
-      }
-    }
-
-    const scaleType = {
-      constant: value => range[scale.type === "continuous" ? range.length - 1 : 0],
-      linear: d3scalewrapper(d3.scaleLinear().domain(domain).range(range).clamp(true), params, unknown),
-      log: d3scalewrapper(d3.scaleLog().domain(domain).range(range).clamp(true), params, unknown),
-      categorical: d3scalewrapper(d3.scaleOrdinal().range(range), params, unknown)
-    };
-
-    return scaleType[params.hasOwnProperty("field") ? params.scale : "constant"];
-  }
-
-
-
-  /*
-  fixed value range
-
-  suggest range
-  0-100 (min-max)
-  25-75 (IQR)
-
-  use d3.quantile
-  */
-
-  function IQR(arr) {
-    // caluculate IQR and return [Q1, median, Q3]
-    // use min-max if numeric nodes count < 4 or Q1 == Q3
-    const nums = arr.map(e => parseFloat(e)).filter(e => !isNaN(e));
-    nums.sort((a, b) => a - b);
-    const cnt = nums.length;
-    if (cnt === 0) { return null; }
-    const mcnt = Math.floor(cnt / 2);
-    if (cnt < 4) { // use min-max
-      const l = nums[0];
-      const u = nums[cnt - 1];
-      const m = cnt % 2 === 1 ? nums[mcnt] : (nums[mcnt - 1] + nums[mcnt]) / 2;
-      return [l, m, u];
-    }
-    const qcnt = Math.floor(mcnt / 2);
-    if (cnt % 2 === 1) {
-      if (mcnt % 2 === 1) {
-        return [nums[qcnt], nums[mcnt], nums[mcnt + qcnt + 1]];
-      } else {
-        const l = (nums[qcnt - 1] + nums[qcnt]) / 2;
-        const u = (nums[mcnt + qcnt] + nums[mcnt + qcnt + 1]) / 2;
-        return [l, nums[mcnt], u];
-      }
+    const isNumeric = appr.hasOwnProperty("domain"); // scale.fieldType(appr.field, config) == "numeric";
+    let range, unknown;
+    if (appr.hasOwnProperty("range")) {
+      // custom range
+      const defaultUnk = { color: '#f0f0f0', size: 1, width: 2};
+      range = appr.range;
+      unknown = appr.unknown || defaultUnk[rangeType];
     } else {
-      const m = (nums[mcnt - 1] + nums[mcnt]) / 2;
-      if (mcnt % 2 === 1) {
-        return [nums[qcnt], m, nums[mcnt + qcnt]];
-      } else {
-        const l = (nums[qcnt - 1] + nums[qcnt]) / 2;
-        const u = (nums[mcnt + qcnt - 1] + nums[mcnt + qcnt]) / 2;
-        return [l, m, u];
-      }
+      const preset = rangeMap[rangeType].find(e => e.name === appr.rangePreset);
+      range = preset.range;
+      unknown = preset.unknown;
     }
+    const d3f = isNumeric ? d3.scaleLinear().domain(appr.domain).range(range).clamp(true)
+      : d3.scaleOrdinal().range(range);
+    return d3scalewrapper(d3f, isNumeric, unknown);
   }
 
 
@@ -1609,7 +1606,8 @@ var app = (function (d3, pako) {
   const CAT_FIELD_PATTERN = new RegExp(
     "(community|comm|class|category|cluster|group|type|label|flag|^is_|^has_|^c_)", "i");
 
-  function fieldType(field, config) {
+  function fieldType(prefixed, config) {
+    const field = prefixed.substring(5);  // e.g. node.field -> field
     if (config.imageFields.includes(field)) {
       return "image"
     } else if  (config.numericFields.includes(field)) {
@@ -1625,6 +1623,15 @@ var app = (function (d3, pako) {
     }
   }
 
+  function IQRAsymFence(values, f=1.5) {
+    // asymmetric IQR fence
+    const med = d3.quantile(values, 0.5);
+    const p25 = d3.quantile(values, 0.25);
+    const p75 = d3.quantile(values, 0.75);
+    const low = p25 - (med - p25) * f;
+    const high = p75 + (p75 - med) * f;
+    return [Math.round(low * 100) / 100, Math.round(high * 100) / 100];  // digits=2
+  }
 
 
   function isD3Format(notation) {
@@ -1639,7 +1646,7 @@ var app = (function (d3, pako) {
 
   var scale = {
     colorScales, nodeSizeScales, edgeWidthScales,
-    scaleFunction, IQR, fieldType, isD3Format
+    scaleFunction, fieldType, IQRAsymFence, isD3Format
   };
 
   class NetworkState extends TransformState {
@@ -1661,6 +1668,10 @@ var app = (function (d3, pako) {
         Object.keys(b).forEach(e => { a.add(e); });
         return a;
       }, new Set())];  // unique keys
+      this.fields = [];
+      this.nodeFields.forEach(e => { this.fields.push(`node.${e}`); });
+      this.edgeFields.forEach(e => { this.fields.push(`edge.${e}`); });
+
 
       // set internal attrs for d3.force
       this.nodes.forEach((e, i) => {
@@ -1680,17 +1691,6 @@ var app = (function (d3, pako) {
       // visible elements
       this.vnodes = [];
       this.vedges = [];
-
-      // Field types
-      this.imageNodeFields = [];
-      this.numericNodeFields = [];
-      this.categoricalNodeFields = [];
-      this.numericEdgeFields = [];
-      this.categoricalEdgeFields = [];
-
-      // for domain calculation
-      this.nodeIQR = {};
-      this.edgeIQR = {};
 
       // States
       this.showNodeImage = false;
@@ -1729,18 +1729,30 @@ var app = (function (d3, pako) {
       if (session.hasOwnProperty("config")) {
         Object.assign(this.config, session.config);
       }
+      // Field types
+      this.imageFields = this.fields.filter(e => scale.fieldType(e, this.config) === "image");
+      this.numericFields = this.fields.filter(e => scale.fieldType(e, this.config) === "numeric");
+      this.categoricalFields = this.fields.filter(e => scale.fieldType(e, this.config) === "categorical");
+      // default domain
+      this.defaultDomain = {};
+      this.numericFields.forEach(e => {
+        this.defaultDomain[e] = scale.IQRAsymFence(
+          e.startsWith("node.") ? this.nodes.map(n => n[e.substring(5)]) : this.edges.map(n => n[e.substring(5)]));
+      });
+
       this.appearance = {
-        nodeColor: {rangePreset: 'green', scale: 'constant'},
-        nodeSize: {rangePreset: '10-40px', scale: 'constant'},
+        nodeColor: {range: ['#98fb98', '#98fb98'], unknown: '#98fb98'},
+        nodeSize: {range: [40, 40], unknown: 40},
         nodeLabel: {size: 20, visible: false},
         nodeImage: {size: 180},
-        edgeColor: {rangePreset: 'gray', scale: 'constant'},
-        edgeWidth: {rangePreset: '4-20px', scale: 'constant'},
+        edgeColor: {range: ['#cccccc', '#cccccc'], unknown: '#cccccc'},
+        edgeWidth: {range: [10, 10], unknown: 10},
         edgeLabel: {size: 12, visible: false}
       };
       if (session.hasOwnProperty("appearance")) {
         Object.assign(this.appearance, session.appearance);
       }
+
       this.snapshots = session.snapshots || [];
       this.snapshotIndex = this.snapshots.length - 1;
     }
@@ -1803,18 +1815,11 @@ var app = (function (d3, pako) {
       this.fnodes = this.nodes;
       this.fedges = this.edges;
 
-      // update field types
-      this.imageNodeFields = this.nodeFields.filter(e => scale.fieldType(e, this.config) === "image");
-      this.numericNodeFields = this.nodeFields.filter(e => scale.fieldType(e, this.config) === "numeric");
-      this.categoricalNodeFields = this.nodeFields.filter(e => scale.fieldType(e, this.config) === "categorical");
-      this.numericEdgeFields = this.edgeFields.filter(e => scale.fieldType(e, this.config) === "numeric");
-      this.categoricalEdgeFields = this.edgeFields.filter(e => scale.fieldType(e, this.config) === "categorical");
-
       this.filters.forEach(cond => {
         const isNode = cond.field.startsWith("node.");
         const field = cond.field.substring(5);
-        const isNum = this.numericNodeFields.includes(field) || this.numericEdgeFields.includes(field);
-        const isCat = this.categoricalNodeFields.includes(field) || this.categoricalEdgeFields.includes(field);
+        const isNum = this.numericFields.includes(cond.field);
+        const isCat = this.categoricalFields.includes(cond.field);
         if (isNode) {
           if (isNum) {
             this.fnodes = this.fnodes.filter(
@@ -1835,14 +1840,6 @@ var app = (function (d3, pako) {
             this.fedges = this.fedges.filter(e => cond.groups.includes(e[field]));
           }
         }
-      });
-
-      // update IQR
-      this.numericNodeFields.forEach(e => {
-        this.nodeIQR[e] = scale.IQR(this.fnodes.map(n => n[e]));
-      });
-      this.numericEdgeFields.forEach(e => {
-        this.edgeIQR[e] = scale.IQR(this.fedges.map(n => n[e]));
       });
 
       this.dispatch("setForce");
@@ -1977,10 +1974,8 @@ var app = (function (d3, pako) {
     const labelVisible = state.appearance.nodeLabel.visible;
     const svgWidth = state.appearance.nodeImage.size;
     const svgHeight = state.appearance.nodeImage.size;
-    const colorScaleFunc = scale.scaleFunction(
-      state.appearance.nodeColor, state.nodeIQR[colorField], "color");
-    const sizeScaleFunc = scale.scaleFunction(
-      state.appearance.nodeSize, state.nodeIQR[sizeField], "size");
+    const colorScaleFunc = scale.scaleFunction("color", state.appearance.nodeColor);
+    const sizeScaleFunc = scale.scaleFunction("size", state.appearance.nodeSize);
     selection.selectAll('.node').select('.node-symbol')
         .attr('r', d => sizeScaleFunc(d[sizeField]))
         .style('fill', d => colorScaleFunc(d[colorField]));
@@ -2018,10 +2013,8 @@ var app = (function (d3, pako) {
     const labelField = state.appearance.edgeLabel.field;
     const labelSize = state.appearance.edgeLabel.size;
     const labelVisible = state.appearance.edgeLabel.visible;
-    const colorScaleFunc = scale.scaleFunction(
-      state.appearance.edgeColor, state.edgeIQR[colorField], "color");
-    const widthScaleFunc = scale.scaleFunction(
-      state.appearance.edgeWidth, state.edgeIQR[widthField], "width");
+    const colorScaleFunc = scale.scaleFunction("color", state.appearance.edgeColor);
+    const widthScaleFunc = scale.scaleFunction("width", state.appearance.edgeWidth);
     selection.selectAll('.link').select('.edge-line')
       .style('stroke', d => colorScaleFunc(d[colorField]))
       .style('stroke-width', d => widthScaleFunc(d[widthField]));
@@ -2624,7 +2617,7 @@ var app = (function (d3, pako) {
     selection.select('.new')
         .on('click', () => {
           state.filters.push({
-            field: `node.${state.numericNodeFields[0]}`,
+            field: state.numericFields[0],
             operator: ">",
             value: 0,
             groups: []
@@ -2658,13 +2651,6 @@ var app = (function (d3, pako) {
 
 
   function filterComponent(selection, d, i, state) {
-    const numn = state.numericNodeFields.map(e => `node.${e}`);
-    const catn = state.categoricalNodeFields.map(e => `node.${e}`);
-    const nume = state.numericEdgeFields.map(e => `edge.${e}`);
-    const cate = state.categoricalEdgeFields.map(e => `edge.${e}`);
-    const fieldOptions = numn.concat(catn, nume, cate);
-    const numFields = numn.concat(nume);
-    const catFields = catn.concat(cate);
     selection
         .classed("card", true)
         .classed("mb-2", true);
@@ -2690,20 +2676,20 @@ var app = (function (d3, pako) {
         .classed("field", true)
         .classed("mb-1", true)
         .call(lbox.selectBox, "Field")
-        .call(lbox.updateSelectBoxOptions, fieldOptions)
+        .call(lbox.updateSelectBoxOptions, state.numericFields.concat(state.categoricalFields))
         .call(lbox.updateSelectBoxValue, d.field);
     // numeric: condition and value
     body.append("div")
         .classed("operator", true)
         .classed("mb-1", true)
-        .classed("d-none", !numFields.includes(d.field))
+        .classed("d-none", !state.numericFields.includes(d.field))
         .call(lbox.selectBox, "Operator")
         .call(lbox.updateSelectBoxOptions, [">", ">=", "<", "<=", "==", "!="])
         .call(lbox.updateSelectBoxValue, d.operator);
     body.append("div")
         .classed("value", true)
         .classed("mb-1", true)
-        .classed("d-none", !numFields.includes(d.field))
+        .classed("d-none", !state.numericFields.includes(d.field))
         .attr('required', 'required')
         .call(box.numberBox, "Value")
         .call(box.updateNumberRange, null, null, "any")
@@ -2716,7 +2702,7 @@ var app = (function (d3, pako) {
         .classed("selected", true)
         .classed("mb-1", true)
         .classed("mx-0", true)
-        .classed("d-none", !catFields.includes(d.field))
+        .classed("d-none", !state.categoricalFields.includes(d.field))
         .call(lbox.checklistBox, "Groups")
         .call(lbox.updateChecklistItems, misc.rank(state.nodes.map(e => e[d.field])).map(e => e[0]))
         .call(lbox.updateChecklistValues, d.groups);
@@ -2754,13 +2740,14 @@ var app = (function (d3, pako) {
         .classed('ms-3', true)
         .classed('gx-0', true)
         .call(lbox.colorScaleBox, 'Range');
-    // Color scale type
+    // Color domain
     selection.append('div')
-        .classed('colorscale', true)
+        .classed('colordomain', true)
         .classed('mb-3', true)
         .classed('ms-3', true)
         .classed('gx-0', true)
-        .call(lbox.selectBox, 'Scale');
+        .call(box.domainBox, 'Domain')
+        .call(badge$1.updateInvalidMessage, 'Please provide valid numbers');
 
     // Node size
     selection.append('div')
@@ -2781,13 +2768,14 @@ var app = (function (d3, pako) {
         .classed('ms-3', true)
         .classed('gx-0', true)
         .call(lbox.selectBox, 'Range');
-    // Size scale type
+    // Size domain
     selection.append('div')
-        .classed('sizescale', true)
+        .classed('sizedomain', true)
         .classed('mb-3', true)
         .classed('ms-3', true)
         .classed('gx-0', true)
-        .call(lbox.selectBox, 'Scale');
+        .call(box.domainBox, 'Domain')
+        .call(badge$1.updateInvalidMessage, 'Please provide valid numbers');
 
     // Node label
     selection.append('div')
@@ -2817,9 +2805,7 @@ var app = (function (d3, pako) {
         .call(box.numberBox, 'Font size')
         .call(box.updateNumberRange, 0.1, 999, 0.1)
         .call(badge$1.updateInvalidMessage,
-              'Please provide a valid number (0.1-999)')
-      .select('.form-control')
-        .attr('required', 'required');
+              'Please provide a valid number (0.1-999)');
     // Node image
     selection.append('div')
       .classed('mb-1', true)
@@ -2842,86 +2828,108 @@ var app = (function (d3, pako) {
   }
 
   function updateNodeControl(selection, state) {
-    const nfields = state.numericNodeFields;
-    const qfields = nfields.concat(state.categoricalNodeFields);
+    const nfields = state.numericFields.filter(e => e.startsWith("node.")).map(e => e.substring(5));
+    const cfields = state.categoricalFields.filter(e => e.startsWith("node.")).map(e => e.substring(5));
+    const qfields = nfields.concat(cfields);
+    const ifields = state.imageFields.filter(e => e.startsWith("node.")).map(e => e.substring(5));
+    const fields = state.fields.filter(e => e.startsWith("node.")).map(e => e.substring(5));
+    const lfields = fields.filter(e => !e.includes(ifields));
 
     // undef -> set default
-    const cnull = !state.appearance.nodeColor.hasOwnProperty("field");
-    const snull = !state.appearance.nodeSize.hasOwnProperty("field");
-    const lnull = !state.appearance.nodeLabel.hasOwnProperty("field");
-    const inull = !state.appearance.nodeImage.hasOwnProperty("field");
-    const isNumColor = state.numericNodeFields.includes(state.appearance.nodeColor.field) || cnull;
-    const colorRange = scale.colorScales.filter(e => e.type === (isNumColor ? "continuous" : "discrete"));
-    const colorScale = isNumColor ? ["constant", "linear", "log"] : ["constant", "categorical"];
+    const color = state.appearance.nodeColor;
+    const hasColorField = color.hasOwnProperty("field");
+    const hasColorDomain = hasColorField && (color.hasOwnProperty("domain")
+      || state.defaultDomain.hasOwnProperty(`node.${color.field}`));
+    const colorDomain = hasColorDomain ? color.domain || state.defaultDomain[`node.${color.field}`] : null;
+    const colorRange = color.hasOwnProperty("range") ? {name: "default", range: color.range}
+      : scale.colorScales.find(e => e.name == color.rangePreset);
     selection.select('.colorfield')
-        .call(lbox.updateSelectBoxOptions, qfields, undefined, undefined, cnull)
-        .call(lbox.updateSelectBoxValue, state.appearance.nodeColor.field)
+        .call(lbox.updateSelectBoxOptions, qfields, undefined, undefined, !hasColorField)
+        .call(lbox.updateSelectBoxValue, color.field)
         .on('change', event => {
           state.setAppearance(
             "nodeColor", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
         });
     selection.select('.colorrange')
-        .call(lbox.updateColorScaleItems, colorRange)
-        .call(lbox.updateColorScaleBox, state.appearance.nodeColor.rangePreset)
+        .call(lbox.updateColorScaleItems,
+          scale.colorScales.filter(e => e.type == (hasColorDomain ? "continuous" : "discrete")))
+        .call(lbox.updateColorScaleBox, colorRange)
         .on('change', event => {
+          delete state.appearance.nodeColor.range;  // remove default range
           state.setAppearance(
             "nodeColor", "rangePreset", lbox.colorScaleBoxValue(d3.select(event.currentTarget)));
         });
-    selection.select('.colorscale')
-        .call(lbox.updateSelectBoxOptions, colorScale)
-        .call(lbox.updateSelectBoxValue, state.appearance.nodeColor.scale)
+    selection.select('.colorrange button')
+        .property("disabled", !hasColorField);
+    selection.select('.colordomain')
+        .call(box.updateDomainValues, colorDomain)
         .on('change', event => {
           state.setAppearance(
-            "nodeColor", "scale", lbox.selectBoxValue(d3.select(event.currentTarget)));
+            "nodeColor", "domain", box.domainValues(d3.select(event.currentTarget)));
         });
+    selection.select('.colordomain').selectAll('.min,.max')
+        .attr('required', hasColorDomain ? 'required' : null)
+        .property("disabled", !hasColorDomain);
 
+    const size = state.appearance.nodeSize;
+    const hasSizeField = size.hasOwnProperty("field");
+    const hasSizeDomain = hasSizeField && (size.hasOwnProperty("domain")
+      || state.defaultDomain.hasOwnProperty(`node.${size.field}`));
+    const sizeDomain = hasSizeDomain ? size.domain || state.defaultDomain[`node.${size.field}`] : null;
+    const sizeRange = size.hasOwnProperty("range") ? {name: "", range: size.range}
+      : scale.nodeSizeScales.filter(e => e.name == size.rangePreset);
     selection.select('.sizefield')
-        .call(lbox.updateSelectBoxOptions, nfields, undefined, undefined, snull)
-        .call(lbox.updateSelectBoxValue, state.appearance.nodeSize.field)
+        .call(lbox.updateSelectBoxOptions, nfields, undefined, undefined, !hasSizeField)
+        .call(lbox.updateSelectBoxValue, size.field)
         .on('change', event => {
           state.setAppearance(
             "nodeSize", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
         });
     selection.select('.sizerange')
         .call(lbox.updateSelectBoxOptions, scale.nodeSizeScales.map(e => e.name))
-        .call(lbox.updateSelectBoxValue, state.appearance.nodeSize.rangePreset)
+        .call(lbox.updateSelectBoxValue, sizeRange)
         .on('change', event => {
+          delete state.appearance.nodeSize.range;  // remove default range
           state.setAppearance(
             "nodeSize", "rangePreset", lbox.selectBoxValue(d3.select(event.currentTarget)));
         });
-    selection.select('.sizescale')
-        .call(lbox.updateSelectBoxOptions, ["constant", "linear", "log"])
-        .call(lbox.updateSelectBoxValue, state.appearance.nodeSize.scale)
+    selection.select('.sizerange select')
+        .attr("disabled", hasSizeDomain ? "disabled" : null);
+    selection.select('.sizedomain')
+        .call(box.updateDomainValues, sizeDomain)
         .on('change', event => {
           state.setAppearance(
-            "nodeSize", "scale", lbox.selectBoxValue(d3.select(event.currentTarget)));
+            "nodeSize", "domain", box.domainValues(d3.select(event.currentTarget)));
         });
+    selection.select('.sizedomain').selectAll('.min,.max')
+        .attr('required', hasSizeDomain ? 'required' : null)
+        .property("disabled", !hasSizeDomain);
 
-    const labelFields = state.nodeFields.filter(e => !state.imageNodeFields.includes(e));
+    const label = state.appearance.nodeLabel;
     selection.select('.labelvisible')
-        .call(box.updateCheckBox, state.appearance.nodeLabel.visible)
+        .call(box.updateCheckBox, label.visible)
         .on('change', event => {
           state.setAppearance(
             "nodeLabel", "visible", box.checkBoxValue(d3.select(event.currentTarget)));
         });
     selection.select('.labelfield')
-        .call(lbox.updateSelectBoxOptions, labelFields, undefined, undefined, lnull)
-        .call(lbox.updateSelectBoxValue, state.appearance.nodeLabel.field)
+        .call(lbox.updateSelectBoxOptions, lfields, undefined, undefined, !label.hasOwnProperty("field"))
+        .call(lbox.updateSelectBoxValue, label.field)
         .on('change', event => {
           state.setAppearance(
             "nodeLabel", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
         });
     selection.select('.labelsize')
-        .call(box.updateFormValue, state.appearance.nodeLabel.size)
+        .call(box.updateFormValue, label.size)
         .on('change', event => {
           state.setAppearance(
             "nodeLabel", "size", box.formValue(d3.select(event.currentTarget)));
         });
 
-    const imageFields = state.nodeFields.filter(e => state.imageNodeFields.includes(e));
+    const image = state.appearance.nodeImage;
     selection.select('.imagefield')
-        .call(lbox.updateSelectBoxOptions, imageFields, undefined, undefined, inull)
-        .call(lbox.updateSelectBoxValue, state.appearance.nodeImage.field)
+        .call(lbox.updateSelectBoxOptions, ifields, undefined, undefined, !image.hasOwnProperty("field"))
+        .call(lbox.updateSelectBoxValue, image.field)
         .on('change', event => {
           state.setAppearance(
             "nodeImage", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
@@ -2956,11 +2964,11 @@ var app = (function (d3, pako) {
         .call(lbox.colorScaleBox, 'Range');
     // Color scale type
     selection.append('div')
-        .classed('colorscale', true)
+        .classed('colordomain', true)
         .classed('mb-3', true)
         .classed('ms-3', true)
         .classed('gx-0', true)
-        .call(lbox.selectBox, 'Scale');
+        .call(box.domainBox, 'Domain');
 
     // Edge width
     selection.append('div')
@@ -2983,11 +2991,11 @@ var app = (function (d3, pako) {
         .call(lbox.selectBox, 'Range');
     // Width scale type
     selection.append('div')
-        .classed('widthscale', true)
+        .classed('widthdomain', true)
         .classed('mb-3', true)
         .classed('ms-3', true)
         .classed('gx-0', true)
-        .call(lbox.selectBox, 'Scale');
+        .call(box.domainBox, 'Domain');
 
     // Edge label
     selection.append('div')
@@ -3017,9 +3025,7 @@ var app = (function (d3, pako) {
         .call(box.numberBox, 'Font size')
         .call(box.updateNumberRange, 0.1, 999, 0.1)
         .call(badge$1.updateInvalidMessage,
-              'Please provide a valid number (0.1-999)')
-      .select('.form-control')
-        .attr('required', 'required');
+              'Please provide a valid number (0.1-999)');
 
     // Other settings
     selection.append('div')
@@ -3035,78 +3041,98 @@ var app = (function (d3, pako) {
   }
 
   function updateEdgeControl(selection, state) {
-    const nfields = state.numericEdgeFields;
-    const qfields = nfields.concat(state.categoricalEdgeFields);
+    const nfields = state.numericFields.filter(e => e.startsWith("edge.")).map(e => e.substring(5));
+    const cfields = state.categoricalFields.filter(e => e.startsWith("edge.")).map(e => e.substring(5));
+    const fields = state.fields.filter(e => e.startsWith("edge.")).map(e => e.substring(5));
+    const qfields = nfields.concat(cfields);
+    const lfields = fields.filter(e => !e.includes(["source", "target"]));
 
     // undef -> set default
-    const cnull = !state.appearance.edgeColor.hasOwnProperty("field");
-    const wnull = !state.appearance.edgeWidth.hasOwnProperty("field");
-    const lnull = !state.appearance.edgeLabel.hasOwnProperty("field");
-
-    const isNumColor = state.numericEdgeFields.includes(state.appearance.edgeColor.field) || cnull;
-    const colorRange = scale.colorScales.filter(e => e.type === (isNumColor ? "continuous" : "discrete"));
-    const colorScale = isNumColor ? ["constant", "linear", "log"] : ["constant", "categorical"];
-
+    const color = state.appearance.edgeColor;
+    const hasColorField = color.hasOwnProperty("field");
+    const hasColorDomain = hasColorField && (color.hasOwnProperty("domain")
+      || state.defaultDomain.hasOwnProperty(`edge.${color.field}`));
+    const colorDomain = hasColorDomain ? color.domain || state.defaultDomain[`edge.${color.field}`] : null;
+    const colorRange = color.hasOwnProperty("range") ? {name: "", range: color.range}
+      : scale.colorScales.filter(e => e.name == color.rangePreset);
     selection.select('.colorfield')
-        .call(lbox.updateSelectBoxOptions, qfields, undefined, undefined, cnull)
-        .call(lbox.updateSelectBoxValue, state.appearance.edgeColor.field)
+        .call(lbox.updateSelectBoxOptions, qfields, undefined, undefined, !hasColorField)
+        .call(lbox.updateSelectBoxValue, color.field)
         .on('change', event => {
           state.setAppearance(
             "edgeColor", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
         });
     selection.select('.colorrange')
-        .call(lbox.updateColorScaleItems, colorRange)
-        .call(lbox.updateColorScaleBox, state.appearance.edgeColor.rangePreset)
+        .call(lbox.updateColorScaleItems,
+          scale.colorScales.filter(e => e.type === (hasColorDomain ? "continuous" : "discrete")))
+        .call(lbox.updateColorScaleBox, colorRange)
         .on('change', event => {
+          delete state.appearance.edgeColor.range;  // remove default range
           state.setAppearance(
             "edgeColor", "rangePreset", lbox.colorScaleBoxValue(d3.select(event.currentTarget)));
         });
-    selection.select('.colorscale')
-        .call(lbox.updateSelectBoxOptions, colorScale)
-        .call(lbox.updateSelectBoxValue, state.appearance.edgeColor.scale)
+    selection.select('.colorrange button')
+        .property("disabled", !hasColorField);
+    selection.select('.colordomain')
+        .call(box.updateDomainValues, colorDomain)
         .on('change', event => {
           state.setAppearance(
-            "edgeColor", "scale", lbox.selectBoxValue(d3.select(event.currentTarget)));
+            "edgeColor", "domain", box.domainValues(d3.select(event.currentTarget)));
         });
+    selection.select('.colordomain').selectAll('.min,.max')
+        .attr('required', hasColorDomain ? 'required' : null)
+        .property("disabled", !hasColorDomain);
 
+    const width = state.appearance.edgeWidth;
+    const hasWidthField = width.hasOwnProperty("field");
+    const hasWidthDomain = hasWidthField && (width.hasOwnProperty("domain")
+      || state.defaultDomain.hasOwnProperty(`edge.${width.field}`));
+    const widthDomain = hasWidthDomain ? width.domain || state.defaultDomain[`edge.${width.field}`] : null;
+    const widthRange = width.hasOwnProperty("range") ? {name: "", range: width.range}
+      : scale.edgeWidthScales.filter(e => e.name == width.rangePreset);
     selection.select('.widthfield')
-        .call(lbox.updateSelectBoxOptions, nfields, undefined, undefined, wnull)
-        .call(lbox.updateSelectBoxValue, state.appearance.edgeWidth.field)
+        .call(lbox.updateSelectBoxOptions, nfields, undefined, undefined, !hasWidthField)
+        .call(lbox.updateSelectBoxValue, width.field)
         .on('change', event => {
           state.setAppearance(
             "edgeWidth", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
         });
     selection.select('.widthrange')
         .call(lbox.updateSelectBoxOptions, scale.edgeWidthScales.map(e => e.name))
-        .call(lbox.updateSelectBoxValue, state.appearance.edgeWidth.rangePreset)
+        .call(lbox.updateSelectBoxValue, widthRange)
         .on('change', event => {
+          delete state.appearance.edgeWidth.range;  // remove default range
           state.setAppearance(
             "edgeWidth", "rangePreset", lbox.selectBoxValue(d3.select(event.currentTarget)));
         });
-    selection.select('.widthscale')
-        .call(lbox.updateSelectBoxOptions, ["constant", "linear", "log"])
-        .call(lbox.updateSelectBoxValue, state.appearance.edgeWidth.scale)
+    selection.select('.widthrange button')
+        .property("disabled", !hasWidthField);
+    selection.select('.widthdomain')
+        .call(box.updateDomainValues, widthDomain)
         .on('change', event => {
           state.setAppearance(
-            "edgeWidth", "scale", lbox.selectBoxValue(d3.select(event.currentTarget)));
+            "edgeWidth", "domain", box.domainValues(d3.select(event.currentTarget)));
         });
+    selection.select('.widthdomain').selectAll('.min,.max')
+        .attr('required', hasWidthDomain ? 'required' : null)
+        .property("disabled", !hasWidthDomain);
 
-    const labelFields = state.edgeFields.filter(e => !["source", "target"].includes(e));
+    const label = state.appearance.edgeLabel;
     selection.select('.labelvisible')
-        .call(box.updateCheckBox, state.appearance.edgeLabel.visible)
+        .call(box.updateCheckBox, label.visible)
         .on('change', event => {
           state.setAppearance(
             "edgeLabel", "visible", box.checkBoxValue(d3.select(event.currentTarget)));
         });
     selection.select('.labelfield')
-        .call(lbox.updateSelectBoxOptions, labelFields, undefined, undefined, lnull)
-        .call(lbox.updateSelectBoxValue, state.appearance.edgeLabel.field)
+        .call(lbox.updateSelectBoxOptions, lfields, undefined, undefined, !label.hasOwnProperty("field"))
+        .call(lbox.updateSelectBoxValue, label.field)
         .on('change', event => {
           state.setAppearance(
             "edgeLabel", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
         });
     selection.select('.labelsize')
-        .call(box.updateFormValue, state.appearance.edgeLabel.size)
+        .call(box.updateFormValue, label.size)
         .on('change', event => {
           state.setAppearance(
             "edgeLabel", "size", box.formValue(d3.select(event.currentTarget)));
@@ -3132,6 +3158,7 @@ var app = (function (d3, pako) {
     - number of isolated nodes
     - average path length
     - clustering coefficient
+    - node/edge numeric fields min, mean, median, max, IQR...
   */
 
 

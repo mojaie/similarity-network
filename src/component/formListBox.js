@@ -162,7 +162,7 @@ function colorScaleBox(selection, label) {
 function updateColorScaleItems(selection, items) {
   const listitems = selection.select('.dropdown-menu')
     .selectAll('li')
-      .data(items, d => d);
+      .data(items, d => d.name);
   listitems.exit().remove();
   listitems.enter()
     .append('li')
@@ -172,7 +172,7 @@ function updateColorScaleItems(selection, items) {
       .attr('href', '#')
       .attr('title', d => d.name)
       .on('click', (event, d) => {
-        selection.call(setSelectedColorScale, d);
+        selection.call(updateColorScaleBox, d);
         selection.dispatch('change', {bubbles: true});
       })
       .each((d, i, nodes) => {
@@ -181,7 +181,7 @@ function updateColorScaleItems(selection, items) {
       });
 }
 
-function setSelectedColorScale(selection, item) {
+function updateColorScaleBox(selection, item) {
   const selected = selection.select('.selected');
   selected.selectAll('svg').remove();
   selected.datum(item);  // Bind selected item record
@@ -189,7 +189,7 @@ function setSelectedColorScale(selection, item) {
       .call(shape.colorBar(item.range), item.range, 80, item.name);
 }
 
-function updateColorScaleBox(selection, key) {
+function oldupdateColorScaleBox(selection, key) {
   const data = selection.select('.dropdown-menu')
     .selectAll('li').data();
   const item = data.find(e => e.name === key);

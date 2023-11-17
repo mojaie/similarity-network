@@ -51,10 +51,8 @@ function updateNodeAttrs(selection, state) {
   const labelVisible = state.appearance.nodeLabel.visible;
   const svgWidth = state.appearance.nodeImage.size;
   const svgHeight = state.appearance.nodeImage.size;
-  const colorScaleFunc = scale.scaleFunction(
-    state.appearance.nodeColor, state.nodeIQR[colorField], "color");
-  const sizeScaleFunc = scale.scaleFunction(
-    state.appearance.nodeSize, state.nodeIQR[sizeField], "size");
+  const colorScaleFunc = scale.scaleFunction("color", state.appearance.nodeColor);
+  const sizeScaleFunc = scale.scaleFunction("size", state.appearance.nodeSize);
   selection.selectAll('.node').select('.node-symbol')
       .attr('r', d => sizeScaleFunc(d[sizeField]))
       .style('fill', d => colorScaleFunc(d[colorField]));
@@ -92,10 +90,8 @@ function updateEdgeAttrs(selection, state) {
   const labelField = state.appearance.edgeLabel.field;
   const labelSize = state.appearance.edgeLabel.size;
   const labelVisible = state.appearance.edgeLabel.visible;
-  const colorScaleFunc = scale.scaleFunction(
-    state.appearance.edgeColor, state.edgeIQR[colorField], "color");
-  const widthScaleFunc = scale.scaleFunction(
-    state.appearance.edgeWidth, state.edgeIQR[widthField], "width");
+  const colorScaleFunc = scale.scaleFunction("color", state.appearance.edgeColor);
+  const widthScaleFunc = scale.scaleFunction("width", state.appearance.edgeWidth);
   selection.selectAll('.link').select('.edge-line')
     .style('stroke', d => colorScaleFunc(d[colorField]))
     .style('stroke-width', d => widthScaleFunc(d[widthField]));

@@ -92,7 +92,27 @@ const edgeWidthScales = [
 
 
 
-function d3scalewrapper(d3func, params, unknown) {
+function d3scalewrapper(d3func, isNumeric, unknown) {
+  return d => {
+    // Sanitize
+    if (d === '' || typeof d === 'undefined' || d === null) {
+      return unknown;  // invalid values
+    }
+    if (isNumeric && parseFloat(d) != d) {
+      return unknown;  // texts
+    }
+    // Apply function
+    const result = d3func(d);
+    if (result === undefined) {
+      console.warn(`Unexpected value: ${d}`);
+      console.warn(params);
+      return unknown;  // TODO: specify unexpected behavior
+    }
+    return result;
+  };
+};
+
+function oldD3scalewrapper(d3func, params, unknown) {
   return d => {
     // Sanitize
     if (d === '' || typeof d === 'undefined' || d === null) {
@@ -115,8 +135,31 @@ function d3scalewrapper(d3func, params, unknown) {
   };
 };
 
+function scaleFunction(rangeType, appr) {
+  const rangeMap = {
+    color: colorScales,
+    size: nodeSizeScales,
+    width: edgeWidthScales
+  };
+  const isNumeric = appr.hasOwnProperty("domain"); // scale.fieldType(appr.field, config) == "numeric";
+  let range, unknown;
+  if (appr.hasOwnProperty("range")) {
+    // custom range
+    const defaultUnk = { color: '#f0f0f0', size: 1, width: 2};
+    range = appr.range;
+    unknown = appr.unknown || defaultUnk[rangeType];
+  } else {
+    const preset = rangeMap[rangeType].find(e => e.name === appr.rangePreset);
+    range = preset.range;
+    unknown = preset.unknown;
+  }
+  const d3f = isNumeric ? d3.scaleLinear().domain(appr.domain).range(range).clamp(true)
+    : d3.scaleOrdinal().range(range);
+  return d3scalewrapper(d3f, isNumeric, unknown);
+}
 
-function scaleFunction(params, iqr, rangeType) {
+
+function oldScaleFunction(params, iqr, rangeType) {  // deprecated
   const rangeMap = {
     color: colorScales,
     size: nodeSizeScales,
@@ -209,7 +252,8 @@ const NUM_FIELD_PATTERN = new RegExp(
 const CAT_FIELD_PATTERN = new RegExp(
   "(community|comm|class|category|cluster|group|type|label|flag|^is_|^has_|^c_)", "i");
 
-function fieldType(field, config) {
+function fieldType(prefixed, config) {
+  const field = prefixed.substring(5)  // e.g. node.field -> field
   if (config.imageFields.includes(field)) {
     return "image"
   } else if  (config.numericFields.includes(field)) {
@@ -225,6 +269,15 @@ function fieldType(field, config) {
   }
 }
 
+function IQRAsymFence(values, f=1.5) {
+  // asymmetric IQR fence
+  const med = d3.quantile(values, 0.5);
+  const p25 = d3.quantile(values, 0.25);
+  const p75 = d3.quantile(values, 0.75);
+  const low = p25 - (med - p25) * f;
+  const high = p75 + (p75 - med) * f;
+  return [Math.round(low * 100) / 100, Math.round(high * 100) / 100];  // digits=2
+}
 
 
 function isD3Format(notation) {
@@ -239,5 +292,5 @@ function isD3Format(notation) {
 
 export default {
   colorScales, nodeSizeScales, edgeWidthScales,
-  scaleFunction, IQR, fieldType, isD3Format
+  scaleFunction, fieldType, IQRAsymFence, isD3Format
 };

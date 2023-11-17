@@ -118,6 +118,7 @@ function numberBox(selection, label) {
       .classed('form-control', true)
       .classed('form-control-sm', true)
       .attr('type', 'number')
+      .attr('required', 'required')
       .on('input', function () {
         const valid = formValid(selection);
         selection.call(setValidity, valid);
@@ -137,6 +138,74 @@ function updateNumberRange(selection, min, max, step) {
       .dispatch('input', {bubbles: true});
 }
 
+
+function domainBox(selection, label) {
+  selection
+      .classed('row', true)
+      .classed('align-items-center', true)
+    .append('div')
+      .classed('col-form-label', true)
+      .classed('col-form-label-sm', true)
+      .text(label);
+
+  const minBox = selection.append('div');
+  minBox.append('label').text('min');
+  minBox.append('input').classed('min', true);
+
+  const maxBox = selection.append('div');
+  maxBox.append('label').text('max');
+  maxBox.append('input').classed('max', true);
+
+  selection.selectAll('div')
+      .classed('form-group', true)
+      .classed('col-4', true)
+      .classed('px-1', true)
+      .classed('mb-0', true);
+
+  selection.selectAll('label')
+      .classed('col-form-label', true)
+      .classed('col-form-label-sm', true)
+      .classed('py-0', true);
+
+  selection.selectAll('input')
+      .classed('form-control', true)
+      .classed('form-control-sm', true)
+      .attr('type', 'number')
+      .attr('step', 0.01)  // IQRAsymFence digits
+      .on('input', function () {
+        const minvalid = selection.select('.min').node().checkValidity();
+        const maxvalid = selection.select('.max').node().checkValidity();
+        selection.call(setDomainValidity, minvalid, maxvalid);
+      });;
+
+  selection.append('div')
+      .classed('col-4', true);
+  selection.append('div')
+      .call(badge.invalidFeedback)
+      .classed('col-8', true);
+}
+
+function updateDomainValues(selection, range) {
+  if (range === null) { return; }
+  selection.select('.min').property('value', range[0]);
+  selection.select('.max').property('value', range[1]);
+}
+
+function domainValues(selection) {
+  return [
+    selection.select('.min').property('value'),
+    selection.select('.max').property('value')
+  ];
+}
+
+function setDomainValidity(selection, minvalid, maxvalid) {
+  selection.select('.invalid-feedback')
+      .style('display', minvalid & maxvalid ? 'none': 'inherit');
+  selection.select('.min')
+      .style('background-color', minvalid ? null : '#ffcccc');
+  selection.select('.max')
+      .style('background-color', maxvalid ? null : '#ffcccc');
+}
 
 /**
  * Render color scale box components
@@ -219,6 +288,7 @@ export default {
   updateFormValue, formValue, formValid, setValidity,
   textBox, readonlyBox, updateReadonlyValue, readonlyValue,
   numberBox, updateNumberRange,
+  domainBox, updateDomainValues, domainValues, setDomainValidity, 
   checkBox, updateCheckBox, checkBoxValue,
   colorBox,
   fileInputBox, clearFileInput, fileInputValue, fileInputValid

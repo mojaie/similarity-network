@@ -26,6 +26,10 @@ export default class NetworkState extends TransformState {
       Object.keys(b).forEach(e => { a.add(e); })
       return a;
     }, new Set())]  // unique keys
+    this.fields = [];
+    this.nodeFields.forEach(e => { this.fields.push(`node.${e}`) })
+    this.edgeFields.forEach(e => { this.fields.push(`edge.${e}`) })
+
 
     // set internal attrs for d3.force
     this.nodes.forEach((e, i) => {
@@ -45,17 +49,6 @@ export default class NetworkState extends TransformState {
     // visible elements
     this.vnodes = [];
     this.vedges = [];
-
-    // Field types
-    this.imageNodeFields = [];
-    this.numericNodeFields = [];
-    this.categoricalNodeFields = [];
-    this.numericEdgeFields = [];
-    this.categoricalEdgeFields = [];
-
-    // for domain calculation
-    this.nodeIQR = {};
-    this.edgeIQR = {};
 
     // States
     this.showNodeImage = false;
@@ -94,18 +87,30 @@ export default class NetworkState extends TransformState {
     if (session.hasOwnProperty("config")) {
       Object.assign(this.config, session.config)
     }
+    // Field types
+    this.imageFields = this.fields.filter(e => scale.fieldType(e, this.config) === "image");
+    this.numericFields = this.fields.filter(e => scale.fieldType(e, this.config) === "numeric");
+    this.categoricalFields = this.fields.filter(e => scale.fieldType(e, this.config) === "categorical");
+    // default domain
+    this.defaultDomain = {};
+    this.numericFields.forEach(e => {
+      this.defaultDomain[e] = scale.IQRAsymFence(
+        e.startsWith("node.") ? this.nodes.map(n => n[e.substring(5)]) : this.edges.map(n => n[e.substring(5)]));
+    });
+
     this.appearance = {
-      nodeColor: {rangePreset: 'green', scale: 'constant'},
-      nodeSize: {rangePreset: '10-40px', scale: 'constant'},
+      nodeColor: {range: ['#98fb98', '#98fb98'], unknown: '#98fb98'},
+      nodeSize: {range: [40, 40], unknown: 40},
       nodeLabel: {size: 20, visible: false},
       nodeImage: {size: 180},
-      edgeColor: {rangePreset: 'gray', scale: 'constant'},
-      edgeWidth: {rangePreset: '4-20px', scale: 'constant'},
+      edgeColor: {range: ['#cccccc', '#cccccc'], unknown: '#cccccc'},
+      edgeWidth: {range: [10, 10], unknown: 10},
       edgeLabel: {size: 12, visible: false}
     };
     if (session.hasOwnProperty("appearance")) {
       Object.assign(this.appearance, session.appearance)
     }
+
     this.snapshots = session.snapshots || [];
     this.snapshotIndex = this.snapshots.length - 1;
   }
@@ -168,18 +173,11 @@ export default class NetworkState extends TransformState {
     this.fnodes = this.nodes;
     this.fedges = this.edges;
 
-    // update field types
-    this.imageNodeFields = this.nodeFields.filter(e => scale.fieldType(e, this.config) === "image");
-    this.numericNodeFields = this.nodeFields.filter(e => scale.fieldType(e, this.config) === "numeric");
-    this.categoricalNodeFields = this.nodeFields.filter(e => scale.fieldType(e, this.config) === "categorical");
-    this.numericEdgeFields = this.edgeFields.filter(e => scale.fieldType(e, this.config) === "numeric");
-    this.categoricalEdgeFields = this.edgeFields.filter(e => scale.fieldType(e, this.config) === "categorical");
-
     this.filters.forEach(cond => {
       const isNode = cond.field.startsWith("node.");
       const field = cond.field.substring(5);
-      const isNum = this.numericNodeFields.includes(field) || this.numericEdgeFields.includes(field);
-      const isCat = this.categoricalNodeFields.includes(field) || this.categoricalEdgeFields.includes(field);
+      const isNum = this.numericFields.includes(cond.field);
+      const isCat = this.categoricalFields.includes(cond.field);
       if (isNode) {
         if (isNum) {
           this.fnodes = this.fnodes.filter(
@@ -200,14 +198,6 @@ export default class NetworkState extends TransformState {
           this.fedges = this.fedges.filter(e => cond.groups.includes(e[field]));
         }
       }
-    });
-
-    // update IQR
-    this.numericNodeFields.forEach(e => {
-      this.nodeIQR[e] = scale.IQR(this.fnodes.map(n => n[e]));
-    });
-    this.numericEdgeFields.forEach(e => {
-      this.edgeIQR[e] = scale.IQR(this.fedges.map(n => n[e]));
     });
 
     this.dispatch("setForce");

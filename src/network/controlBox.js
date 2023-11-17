@@ -135,7 +135,7 @@ function updateFilterControl(selection, state) {
   selection.select('.new')
       .on('click', () => {
         state.filters.push({
-          field: `node.${state.numericNodeFields[0]}`,
+          field: state.numericFields[0],
           operator: ">",
           value: 0,
           groups: []
@@ -169,13 +169,6 @@ function updateFilterControl(selection, state) {
 
 
 function filterComponent(selection, d, i, state) {
-  const numn = state.numericNodeFields.map(e => `node.${e}`);
-  const catn = state.categoricalNodeFields.map(e => `node.${e}`);
-  const nume = state.numericEdgeFields.map(e => `edge.${e}`);
-  const cate = state.categoricalEdgeFields.map(e => `edge.${e}`);
-  const fieldOptions = numn.concat(catn, nume, cate);
-  const numFields = numn.concat(nume);
-  const catFields = catn.concat(cate);
   selection
       .classed("card", true)
       .classed("mb-2", true);
@@ -201,20 +194,20 @@ function filterComponent(selection, d, i, state) {
       .classed("field", true)
       .classed("mb-1", true)
       .call(lbox.selectBox, "Field")
-      .call(lbox.updateSelectBoxOptions, fieldOptions)
+      .call(lbox.updateSelectBoxOptions, state.numericFields.concat(state.categoricalFields))
       .call(lbox.updateSelectBoxValue, d.field);
   // numeric: condition and value
   body.append("div")
       .classed("operator", true)
       .classed("mb-1", true)
-      .classed("d-none", !numFields.includes(d.field))
+      .classed("d-none", !state.numericFields.includes(d.field))
       .call(lbox.selectBox, "Operator")
       .call(lbox.updateSelectBoxOptions, [">", ">=", "<", "<=", "==", "!="])
       .call(lbox.updateSelectBoxValue, d.operator);
   body.append("div")
       .classed("value", true)
       .classed("mb-1", true)
-      .classed("d-none", !numFields.includes(d.field))
+      .classed("d-none", !state.numericFields.includes(d.field))
       .attr('required', 'required')
       .call(box.numberBox, "Value")
       .call(box.updateNumberRange, null, null, "any")
@@ -227,7 +220,7 @@ function filterComponent(selection, d, i, state) {
       .classed("selected", true)
       .classed("mb-1", true)
       .classed("mx-0", true)
-      .classed("d-none", !catFields.includes(d.field))
+      .classed("d-none", !state.categoricalFields.includes(d.field))
       .call(lbox.checklistBox, "Groups")
       .call(lbox.updateChecklistItems, misc.rank(state.nodes.map(e => e[d.field])).map(e => e[0]))
       .call(lbox.updateChecklistValues, d.groups);
@@ -265,13 +258,14 @@ function NodeControlBox(selection) {
       .classed('ms-3', true)
       .classed('gx-0', true)
       .call(lbox.colorScaleBox, 'Range');
-  // Color scale type
+  // Color domain
   selection.append('div')
-      .classed('colorscale', true)
+      .classed('colordomain', true)
       .classed('mb-3', true)
       .classed('ms-3', true)
       .classed('gx-0', true)
-      .call(lbox.selectBox, 'Scale');
+      .call(box.domainBox, 'Domain')
+      .call(badge.updateInvalidMessage, 'Please provide valid numbers');
 
   // Node size
   selection.append('div')
@@ -292,13 +286,14 @@ function NodeControlBox(selection) {
       .classed('ms-3', true)
       .classed('gx-0', true)
       .call(lbox.selectBox, 'Range');
-  // Size scale type
+  // Size domain
   selection.append('div')
-      .classed('sizescale', true)
+      .classed('sizedomain', true)
       .classed('mb-3', true)
       .classed('ms-3', true)
       .classed('gx-0', true)
-      .call(lbox.selectBox, 'Scale');
+      .call(box.domainBox, 'Domain')
+      .call(badge.updateInvalidMessage, 'Please provide valid numbers');
 
   // Node label
   selection.append('div')
@@ -328,9 +323,7 @@ function NodeControlBox(selection) {
       .call(box.numberBox, 'Font size')
       .call(box.updateNumberRange, 0.1, 999, 0.1)
       .call(badge.updateInvalidMessage,
-            'Please provide a valid number (0.1-999)')
-    .select('.form-control')
-      .attr('required', 'required');
+            'Please provide a valid number (0.1-999)');
   // Node image
   selection.append('div')
     .classed('mb-1', true)
@@ -353,86 +346,108 @@ function NodeControlBox(selection) {
 }
 
 function updateNodeControl(selection, state) {
-  const nfields = state.numericNodeFields;
-  const qfields = nfields.concat(state.categoricalNodeFields);
+  const nfields = state.numericFields.filter(e => e.startsWith("node.")).map(e => e.substring(5));
+  const cfields = state.categoricalFields.filter(e => e.startsWith("node.")).map(e => e.substring(5));
+  const qfields = nfields.concat(cfields);
+  const ifields = state.imageFields.filter(e => e.startsWith("node.")).map(e => e.substring(5));
+  const fields = state.fields.filter(e => e.startsWith("node.")).map(e => e.substring(5));
+  const lfields = fields.filter(e => !e.includes(ifields));
 
   // undef -> set default
-  const cnull = !state.appearance.nodeColor.hasOwnProperty("field");
-  const snull = !state.appearance.nodeSize.hasOwnProperty("field");
-  const lnull = !state.appearance.nodeLabel.hasOwnProperty("field");
-  const inull = !state.appearance.nodeImage.hasOwnProperty("field");
-  const isNumColor = state.numericNodeFields.includes(state.appearance.nodeColor.field) || cnull;
-  const colorRange = scale.colorScales.filter(e => e.type === (isNumColor ? "continuous" : "discrete"));
-  const colorScale = isNumColor ? ["constant", "linear", "log"] : ["constant", "categorical"];
+  const color = state.appearance.nodeColor;
+  const hasColorField = color.hasOwnProperty("field");
+  const hasColorDomain = hasColorField && (color.hasOwnProperty("domain")
+    || state.defaultDomain.hasOwnProperty(`node.${color.field}`));
+  const colorDomain = hasColorDomain ? color.domain || state.defaultDomain[`node.${color.field}`] : null;
+  const colorRange = color.hasOwnProperty("range") ? {name: "default", range: color.range}
+    : scale.colorScales.find(e => e.name == color.rangePreset);
   selection.select('.colorfield')
-      .call(lbox.updateSelectBoxOptions, qfields, undefined, undefined, cnull)
-      .call(lbox.updateSelectBoxValue, state.appearance.nodeColor.field)
+      .call(lbox.updateSelectBoxOptions, qfields, undefined, undefined, !hasColorField)
+      .call(lbox.updateSelectBoxValue, color.field)
       .on('change', event => {
         state.setAppearance(
           "nodeColor", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
       });
   selection.select('.colorrange')
-      .call(lbox.updateColorScaleItems, colorRange)
-      .call(lbox.updateColorScaleBox, state.appearance.nodeColor.rangePreset)
+      .call(lbox.updateColorScaleItems,
+        scale.colorScales.filter(e => e.type == (hasColorDomain ? "continuous" : "discrete")))
+      .call(lbox.updateColorScaleBox, colorRange)
       .on('change', event => {
+        delete state.appearance.nodeColor.range;  // remove default range
         state.setAppearance(
           "nodeColor", "rangePreset", lbox.colorScaleBoxValue(d3.select(event.currentTarget)));
       });
-  selection.select('.colorscale')
-      .call(lbox.updateSelectBoxOptions, colorScale)
-      .call(lbox.updateSelectBoxValue, state.appearance.nodeColor.scale)
+  selection.select('.colorrange button')
+      .property("disabled", !hasColorField)
+  selection.select('.colordomain')
+      .call(box.updateDomainValues, colorDomain)
       .on('change', event => {
         state.setAppearance(
-          "nodeColor", "scale", lbox.selectBoxValue(d3.select(event.currentTarget)));
+          "nodeColor", "domain", box.domainValues(d3.select(event.currentTarget)));
       });
+  selection.select('.colordomain').selectAll('.min,.max')
+      .attr('required', hasColorDomain ? 'required' : null)
+      .property("disabled", !hasColorDomain);
 
+  const size = state.appearance.nodeSize;
+  const hasSizeField = size.hasOwnProperty("field");
+  const hasSizeDomain = hasSizeField && (size.hasOwnProperty("domain")
+    || state.defaultDomain.hasOwnProperty(`node.${size.field}`));
+  const sizeDomain = hasSizeDomain ? size.domain || state.defaultDomain[`node.${size.field}`] : null;
+  const sizeRange = size.hasOwnProperty("range") ? {name: "", range: size.range}
+    : scale.nodeSizeScales.filter(e => e.name == size.rangePreset);
   selection.select('.sizefield')
-      .call(lbox.updateSelectBoxOptions, nfields, undefined, undefined, snull)
-      .call(lbox.updateSelectBoxValue, state.appearance.nodeSize.field)
+      .call(lbox.updateSelectBoxOptions, nfields, undefined, undefined, !hasSizeField)
+      .call(lbox.updateSelectBoxValue, size.field)
       .on('change', event => {
         state.setAppearance(
           "nodeSize", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
       });
   selection.select('.sizerange')
       .call(lbox.updateSelectBoxOptions, scale.nodeSizeScales.map(e => e.name))
-      .call(lbox.updateSelectBoxValue, state.appearance.nodeSize.rangePreset)
+      .call(lbox.updateSelectBoxValue, sizeRange)
       .on('change', event => {
+        delete state.appearance.nodeSize.range;  // remove default range
         state.setAppearance(
           "nodeSize", "rangePreset", lbox.selectBoxValue(d3.select(event.currentTarget)));
       });
-  selection.select('.sizescale')
-      .call(lbox.updateSelectBoxOptions, ["constant", "linear", "log"])
-      .call(lbox.updateSelectBoxValue, state.appearance.nodeSize.scale)
+  selection.select('.sizerange select')
+      .attr("disabled", hasSizeDomain ? "disabled" : null)
+  selection.select('.sizedomain')
+      .call(box.updateDomainValues, sizeDomain)
       .on('change', event => {
         state.setAppearance(
-          "nodeSize", "scale", lbox.selectBoxValue(d3.select(event.currentTarget)));
+          "nodeSize", "domain", box.domainValues(d3.select(event.currentTarget)));
       });
+  selection.select('.sizedomain').selectAll('.min,.max')
+      .attr('required', hasSizeDomain ? 'required' : null)
+      .property("disabled", !hasSizeDomain);
 
-  const labelFields = state.nodeFields.filter(e => !state.imageNodeFields.includes(e));
+  const label = state.appearance.nodeLabel;
   selection.select('.labelvisible')
-      .call(box.updateCheckBox, state.appearance.nodeLabel.visible)
+      .call(box.updateCheckBox, label.visible)
       .on('change', event => {
         state.setAppearance(
           "nodeLabel", "visible", box.checkBoxValue(d3.select(event.currentTarget)));
       });
   selection.select('.labelfield')
-      .call(lbox.updateSelectBoxOptions, labelFields, undefined, undefined, lnull)
-      .call(lbox.updateSelectBoxValue, state.appearance.nodeLabel.field)
+      .call(lbox.updateSelectBoxOptions, lfields, undefined, undefined, !label.hasOwnProperty("field"))
+      .call(lbox.updateSelectBoxValue, label.field)
       .on('change', event => {
         state.setAppearance(
           "nodeLabel", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
       });
   selection.select('.labelsize')
-      .call(box.updateFormValue, state.appearance.nodeLabel.size)
+      .call(box.updateFormValue, label.size)
       .on('change', event => {
         state.setAppearance(
           "nodeLabel", "size", box.formValue(d3.select(event.currentTarget)));
       });
 
-  const imageFields = state.nodeFields.filter(e => state.imageNodeFields.includes(e));
+  const image = state.appearance.nodeImage;
   selection.select('.imagefield')
-      .call(lbox.updateSelectBoxOptions, imageFields, undefined, undefined, inull)
-      .call(lbox.updateSelectBoxValue, state.appearance.nodeImage.field)
+      .call(lbox.updateSelectBoxOptions, ifields, undefined, undefined, !image.hasOwnProperty("field"))
+      .call(lbox.updateSelectBoxValue, image.field)
       .on('change', event => {
         state.setAppearance(
           "nodeImage", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
@@ -467,11 +482,11 @@ function EdgeControlBox(selection) {
       .call(lbox.colorScaleBox, 'Range');
   // Color scale type
   selection.append('div')
-      .classed('colorscale', true)
+      .classed('colordomain', true)
       .classed('mb-3', true)
       .classed('ms-3', true)
       .classed('gx-0', true)
-      .call(lbox.selectBox, 'Scale');
+      .call(box.domainBox, 'Domain');
 
   // Edge width
   selection.append('div')
@@ -494,11 +509,11 @@ function EdgeControlBox(selection) {
       .call(lbox.selectBox, 'Range');
   // Width scale type
   selection.append('div')
-      .classed('widthscale', true)
+      .classed('widthdomain', true)
       .classed('mb-3', true)
       .classed('ms-3', true)
       .classed('gx-0', true)
-      .call(lbox.selectBox, 'Scale');
+      .call(box.domainBox, 'Domain');
 
   // Edge label
   selection.append('div')
@@ -528,9 +543,7 @@ function EdgeControlBox(selection) {
       .call(box.numberBox, 'Font size')
       .call(box.updateNumberRange, 0.1, 999, 0.1)
       .call(badge.updateInvalidMessage,
-            'Please provide a valid number (0.1-999)')
-    .select('.form-control')
-      .attr('required', 'required');
+            'Please provide a valid number (0.1-999)');
 
   // Other settings
   selection.append('div')
@@ -546,78 +559,98 @@ function EdgeControlBox(selection) {
 }
 
 function updateEdgeControl(selection, state) {
-  const nfields = state.numericEdgeFields;
-  const qfields = nfields.concat(state.categoricalEdgeFields);
+  const nfields = state.numericFields.filter(e => e.startsWith("edge.")).map(e => e.substring(5));
+  const cfields = state.categoricalFields.filter(e => e.startsWith("edge.")).map(e => e.substring(5));
+  const fields = state.fields.filter(e => e.startsWith("edge.")).map(e => e.substring(5));
+  const qfields = nfields.concat(cfields);
+  const lfields = fields.filter(e => !e.includes(["source", "target"]));
 
   // undef -> set default
-  const cnull = !state.appearance.edgeColor.hasOwnProperty("field");
-  const wnull = !state.appearance.edgeWidth.hasOwnProperty("field");
-  const lnull = !state.appearance.edgeLabel.hasOwnProperty("field");
-
-  const isNumColor = state.numericEdgeFields.includes(state.appearance.edgeColor.field) || cnull;
-  const colorRange = scale.colorScales.filter(e => e.type === (isNumColor ? "continuous" : "discrete"));
-  const colorScale = isNumColor ? ["constant", "linear", "log"] : ["constant", "categorical"];
-
+  const color = state.appearance.edgeColor;
+  const hasColorField = color.hasOwnProperty("field");
+  const hasColorDomain = hasColorField && (color.hasOwnProperty("domain")
+    || state.defaultDomain.hasOwnProperty(`edge.${color.field}`));
+  const colorDomain = hasColorDomain ? color.domain || state.defaultDomain[`edge.${color.field}`] : null;
+  const colorRange = color.hasOwnProperty("range") ? {name: "", range: color.range}
+    : scale.colorScales.filter(e => e.name == color.rangePreset);
   selection.select('.colorfield')
-      .call(lbox.updateSelectBoxOptions, qfields, undefined, undefined, cnull)
-      .call(lbox.updateSelectBoxValue, state.appearance.edgeColor.field)
+      .call(lbox.updateSelectBoxOptions, qfields, undefined, undefined, !hasColorField)
+      .call(lbox.updateSelectBoxValue, color.field)
       .on('change', event => {
         state.setAppearance(
           "edgeColor", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
       });
   selection.select('.colorrange')
-      .call(lbox.updateColorScaleItems, colorRange)
-      .call(lbox.updateColorScaleBox, state.appearance.edgeColor.rangePreset)
+      .call(lbox.updateColorScaleItems,
+        scale.colorScales.filter(e => e.type === (hasColorDomain ? "continuous" : "discrete")))
+      .call(lbox.updateColorScaleBox, colorRange)
       .on('change', event => {
+        delete state.appearance.edgeColor.range;  // remove default range
         state.setAppearance(
           "edgeColor", "rangePreset", lbox.colorScaleBoxValue(d3.select(event.currentTarget)));
       });
-  selection.select('.colorscale')
-      .call(lbox.updateSelectBoxOptions, colorScale)
-      .call(lbox.updateSelectBoxValue, state.appearance.edgeColor.scale)
+  selection.select('.colorrange button')
+      .property("disabled", !hasColorField)
+  selection.select('.colordomain')
+      .call(box.updateDomainValues, colorDomain)
       .on('change', event => {
         state.setAppearance(
-          "edgeColor", "scale", lbox.selectBoxValue(d3.select(event.currentTarget)));
+          "edgeColor", "domain", box.domainValues(d3.select(event.currentTarget)));
       });
+  selection.select('.colordomain').selectAll('.min,.max')
+      .attr('required', hasColorDomain ? 'required' : null)
+      .property("disabled", !hasColorDomain);
 
+  const width = state.appearance.edgeWidth;
+  const hasWidthField = width.hasOwnProperty("field");
+  const hasWidthDomain = hasWidthField && (width.hasOwnProperty("domain")
+    || state.defaultDomain.hasOwnProperty(`edge.${width.field}`));
+  const widthDomain = hasWidthDomain ? width.domain || state.defaultDomain[`edge.${width.field}`] : null;
+  const widthRange = width.hasOwnProperty("range") ? {name: "", range: width.range}
+    : scale.edgeWidthScales.filter(e => e.name == width.rangePreset);
   selection.select('.widthfield')
-      .call(lbox.updateSelectBoxOptions, nfields, undefined, undefined, wnull)
-      .call(lbox.updateSelectBoxValue, state.appearance.edgeWidth.field)
+      .call(lbox.updateSelectBoxOptions, nfields, undefined, undefined, !hasWidthField)
+      .call(lbox.updateSelectBoxValue, width.field)
       .on('change', event => {
         state.setAppearance(
           "edgeWidth", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
       });
   selection.select('.widthrange')
       .call(lbox.updateSelectBoxOptions, scale.edgeWidthScales.map(e => e.name))
-      .call(lbox.updateSelectBoxValue, state.appearance.edgeWidth.rangePreset)
+      .call(lbox.updateSelectBoxValue, widthRange)
       .on('change', event => {
+        delete state.appearance.edgeWidth.range;  // remove default range
         state.setAppearance(
           "edgeWidth", "rangePreset", lbox.selectBoxValue(d3.select(event.currentTarget)));
       });
-  selection.select('.widthscale')
-      .call(lbox.updateSelectBoxOptions, ["constant", "linear", "log"])
-      .call(lbox.updateSelectBoxValue, state.appearance.edgeWidth.scale)
+  selection.select('.widthrange button')
+      .property("disabled", !hasWidthField)
+  selection.select('.widthdomain')
+      .call(box.updateDomainValues, widthDomain)
       .on('change', event => {
         state.setAppearance(
-          "edgeWidth", "scale", lbox.selectBoxValue(d3.select(event.currentTarget)));
+          "edgeWidth", "domain", box.domainValues(d3.select(event.currentTarget)));
       });
+  selection.select('.widthdomain').selectAll('.min,.max')
+      .attr('required', hasWidthDomain ? 'required' : null)
+      .property("disabled", !hasWidthDomain);
 
-  const labelFields = state.edgeFields.filter(e => !["source", "target"].includes(e));
+  const label = state.appearance.edgeLabel;
   selection.select('.labelvisible')
-      .call(box.updateCheckBox, state.appearance.edgeLabel.visible)
+      .call(box.updateCheckBox, label.visible)
       .on('change', event => {
         state.setAppearance(
           "edgeLabel", "visible", box.checkBoxValue(d3.select(event.currentTarget)));
       });
   selection.select('.labelfield')
-      .call(lbox.updateSelectBoxOptions, labelFields, undefined, undefined, lnull)
-      .call(lbox.updateSelectBoxValue, state.appearance.edgeLabel.field)
+      .call(lbox.updateSelectBoxOptions, lfields, undefined, undefined, !label.hasOwnProperty("field"))
+      .call(lbox.updateSelectBoxValue, label.field)
       .on('change', event => {
         state.setAppearance(
           "edgeLabel", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
       });
   selection.select('.labelsize')
-      .call(box.updateFormValue, state.appearance.edgeLabel.size)
+      .call(box.updateFormValue, label.size)
       .on('change', event => {
         state.setAppearance(
           "edgeLabel", "size", box.formValue(d3.select(event.currentTarget)));
@@ -643,6 +676,7 @@ function updateEdgeControl(selection, state) {
   - number of isolated nodes
   - average path length
   - clustering coefficient
+  - node/edge numeric fields min, mean, median, max, IQR...
 */
 
 
