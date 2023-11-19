@@ -174,6 +174,17 @@ function IQRAsymFence(values, f=1.5) {
 }
 
 
+function quantiles(values) {
+  return [ // digits=2
+    Math.round(d3.quantile(values, 0) * 100) / 100,
+    Math.round(d3.quantile(values, 0.25) * 100) / 100,
+    Math.round(d3.quantile(values, 0.5) * 100) / 100,
+    Math.round(d3.quantile(values, 0.75) * 100) / 100,
+    Math.round(d3.quantile(values, 1) * 100) / 100
+  ];
+}
+
+
 function isD3Format(notation) {
   try {
     d3.format(notation);
@@ -186,5 +197,5 @@ function isD3Format(notation) {
 
 export default {
   colorScales, nodeSizeScales, edgeWidthScales,
-  scaleFunction, fieldType, IQRAsymFence, isD3Format
+  scaleFunction, fieldType, IQRAsymFence, quantiles, isD3Format
 };

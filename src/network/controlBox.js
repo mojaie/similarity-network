@@ -700,35 +700,61 @@ function StatisticsBox(selection) {
   edgecount.append('div')
       .classed('col-4', true)
       .classed("edgecount", true);
-
   const logd = selection.append('div')
       .classed('row', true);
   logd.append('div')
-      .classed('col-6', true)
-      .text("logD:");
+      .classed('col-8', true)
+      .text("logD(shown/total): ");
   logd.append('div')
-      .classed('col-6', true)
+      .classed('col-4', true)
       .classed("logd", true);
+
+  const qtitle = selection.append('div')
+      .classed('row', true)
+      .classed('mt-3', true)
+  qtitle.append('div')
+      .classed('col-12', true)
+      .text("Data quantiles: ");
+  const quantiles = selection.append('div')
+      .classed('row', true);
+  quantiles.append('div')
+      .classed('col-12', true)
+      .classed("quantiles", true);
 }
 
 
 function updateStatistics(selection, state) {
+  // topology
   const ncnt = state.nodes.length;
   const ecnt = state.edges.length;
+  const maxedges = ncnt * (ncnt - 1) / 2;
   const fncnt = state.fnodes.length;
   const fecnt = state.fedges.length;
-  const maxedges = fncnt * (fncnt - 1) / 2;
-  const logd = d3.format('.2f')(Math.log10(fecnt / maxedges));
-
+  const fmaxedges = fncnt * (fncnt - 1) / 2;
+  const logd = d3.format('.2f')(Math.log10(ecnt / maxedges));
+  const flogd = d3.format('.2f')(Math.log10(fecnt / fmaxedges));
   selection.select('.nodecount')
       .text(`${fncnt}/${ncnt}`);
   selection.select('.edgecount')
       .text(`${fecnt}/${ecnt}`);
   selection.select('.logd')
-      .text(logd);
+      .text(`${flogd}/${logd}`);
+
+  // field statistics
+  const qs = state.numericFields.map(e => {
+    return `${e}: ${JSON.stringify(scale.quantiles(
+      e.startsWith("node.") ? state.nodes.map(n => n[e.substring(5)]) : state.edges.map(n => n[e.substring(5)])))}`;
+  });
+  
+  const stats = selection.select('.quantiles')
+      .selectAll('div')
+      .data(qs, d => d);
+  stats.exit().remove();
+  stats.enter()
+      .append('div')
+      .merge(stats)
+        .text(d => d);
 }
-
-
 
 
 function controlBoxNav(selection, id, label, active) {
