@@ -37,6 +37,7 @@ export default class NetworkState extends TransformState {
       e.__selected = false;  // for multiple selection
     })
     this.edges.forEach((e, i) => {
+      // original edges and edge indices used for filtering by graph topology.
       e.__source = e.source;
       e.__target = e.target;
       e.__index = i;
@@ -69,11 +70,22 @@ export default class NetworkState extends TransformState {
       this.updateForceIndicatorCallback(sim);
     };
 
-    // Initialize snapshot
+
+    /* Initialize snapshot */
+
     this.name = "default"; // not shown
+
+    // Filters
     this.filters = session.filters || [
       {field: 'edge.weight', operator: '>=', value: 0.7, groups: []}
     ];
+    this.filters.forEach((r, i) => {  // fill null
+      if (!r.hasOwnProperty("operator")) { this.filters[i].operator = null; }
+      if (!r.hasOwnProperty("value")) { this.filters[i].value = null; }
+      if (!r.hasOwnProperty("groups")) { this.filters[i].groups = []; }
+    });
+
+    // Config
     this.config = {
       numericFields: [],
       categoricalFields: [],
@@ -98,6 +110,7 @@ export default class NetworkState extends TransformState {
         e.startsWith("node.") ? this.nodes.map(n => n[e.substring(5)]) : this.edges.map(n => n[e.substring(5)]));
     });
 
+    // Appearance
     this.appearance = {
       nodeColor: {range: ['#98fb98', '#98fb98'], unknown: '#98fb98'},
       nodeSize: {range: [40, 40], unknown: 40},
@@ -110,6 +123,24 @@ export default class NetworkState extends TransformState {
     if (session.hasOwnProperty("appearance")) {
       Object.assign(this.appearance, session.appearance)
     }
+    ["nodeColor", "nodeSize", "edgeColor", "edgeWidth"].forEach((k, i) => {
+      // fill null
+      if (!this.appearance[k].hasOwnProperty("field")) {
+        this.appearance[k].field = null;
+      }
+      if (!this.appearance[k].hasOwnProperty("domain")) {
+        this.appearance[k].domain = null;
+      }
+      if (!this.appearance[k].hasOwnProperty("range")) {
+        this.appearance[k].range = null;
+      }
+      if (!this.appearance[k].hasOwnProperty("rangePreset")) {
+        this.appearance[k].rangePreset = null;
+      }
+      if (!this.appearance[k].hasOwnProperty("unknown")) {
+        this.appearance[k].unknown = null;
+      }
+    });
 
     this.snapshots = session.snapshots || [];
     this.snapshotIndex = this.snapshots.length - 1;
@@ -270,7 +301,7 @@ export default class NetworkState extends TransformState {
     this.setStateChanged(true);
   }
 
-  setAppearance(group, field, value) {
+  setAppearance(group, field, value) {  // TODO: e => d3.select(e.currentTarget)
     this.appearance[group][field] = value;
     if (group.startsWith("node")) {
       this.dispatch("updateNodeAttr");

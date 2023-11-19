@@ -36,7 +36,7 @@ function LayoutControlBox(selection) {
       .call(lbox.selectBox, 'Force parameter')
       .call(lbox.updateSelectBoxOptions, Object.keys(force.forceParam));
   const forceBox = selection.append('div')
-      .classed('mb-3', true)
+      .classed('mb-3', true);
   forceBox.append('label')
       .classed('form-label', true)
       .classed('mb-0', true)
@@ -351,36 +351,36 @@ function updateNodeControl(selection, state) {
   const qfields = nfields.concat(cfields);
   const ifields = state.imageFields.filter(e => e.startsWith("node.")).map(e => e.substring(5));
   const fields = state.fields.filter(e => e.startsWith("node.")).map(e => e.substring(5));
-  const lfields = fields.filter(e => !e.includes(ifields));
+  const lfields = fields.filter(e => !ifields.includes(e));
 
-  // undef -> set default
   const color = state.appearance.nodeColor;
-  const hasColorField = color.hasOwnProperty("field");
-  const hasColorDomain = hasColorField && (color.hasOwnProperty("domain")
-    || state.defaultDomain.hasOwnProperty(`node.${color.field}`));
-  const colorDomain = hasColorDomain ? color.domain || state.defaultDomain[`node.${color.field}`] : null;
-  const colorRange = color.hasOwnProperty("range") ? {name: "default", range: color.range}
-    : scale.colorScales.find(e => e.name == color.rangePreset);
+  const hasColorField = color.field !== null;
+  const hasColorDomain = hasColorField && color.domain !== null;
+  const colorRange = color.range === null ? scale.colorScales.find(e => e.name == color.rangePreset)
+    : {name: "default", range: color.range};
   selection.select('.colorfield')
       .call(lbox.updateSelectBoxOptions, qfields, undefined, undefined, !hasColorField)
       .call(lbox.updateSelectBoxValue, color.field)
       .on('change', event => {
-        state.setAppearance(
-          "nodeColor", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
+        const v = lbox.selectBoxValue(d3.select(event.currentTarget))
+        if (color.domain === null) {  // set infered domain
+          state.appearance.nodeColor.domain = state.defaultDomain[`node.${v}`];
+        }
+        state.setAppearance("nodeColor", "field", v);
       });
   selection.select('.colorrange')
       .call(lbox.updateColorScaleItems,
         scale.colorScales.filter(e => e.type == (hasColorDomain ? "continuous" : "discrete")))
       .call(lbox.updateColorScaleBox, colorRange)
       .on('change', event => {
-        delete state.appearance.nodeColor.range;  // remove default range
+        state.appearance.nodeColor.range = null;  // remove default range
         state.setAppearance(
           "nodeColor", "rangePreset", lbox.colorScaleBoxValue(d3.select(event.currentTarget)));
       });
   selection.select('.colorrange button')
       .property("disabled", !hasColorField)
   selection.select('.colordomain')
-      .call(box.updateDomainValues, colorDomain)
+      .call(box.updateDomainValues, color.domain)
       .on('change', event => {
         state.setAppearance(
           "nodeColor", "domain", box.domainValues(d3.select(event.currentTarget)));
@@ -390,31 +390,31 @@ function updateNodeControl(selection, state) {
       .property("disabled", !hasColorDomain);
 
   const size = state.appearance.nodeSize;
-  const hasSizeField = size.hasOwnProperty("field");
-  const hasSizeDomain = hasSizeField && (size.hasOwnProperty("domain")
-    || state.defaultDomain.hasOwnProperty(`node.${size.field}`));
-  const sizeDomain = hasSizeDomain ? size.domain || state.defaultDomain[`node.${size.field}`] : null;
-  const sizeRange = size.hasOwnProperty("range") ? {name: "", range: size.range}
-    : scale.nodeSizeScales.filter(e => e.name == size.rangePreset);
+  const hasSizeField = size.field !== null;
+  const hasSizeDomain = hasSizeField && size.domain !== null;
+  const sizeRange = size.range === null ? size.rangePreset : "";
   selection.select('.sizefield')
       .call(lbox.updateSelectBoxOptions, nfields, undefined, undefined, !hasSizeField)
       .call(lbox.updateSelectBoxValue, size.field)
       .on('change', event => {
-        state.setAppearance(
-          "nodeSize", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
+        const v = lbox.selectBoxValue(d3.select(event.currentTarget))
+        if (size.domain === null) {  // set infered domain
+          state.appearance.nodeSize.domain = state.defaultDomain[`node.${v}`];
+        }
+        state.setAppearance("nodeSize", "field", v);
       });
   selection.select('.sizerange')
-      .call(lbox.updateSelectBoxOptions, scale.nodeSizeScales.map(e => e.name))
+      .call(lbox.updateSelectBoxOptions, scale.nodeSizeScales, d => d.name, d => d.name)
       .call(lbox.updateSelectBoxValue, sizeRange)
       .on('change', event => {
-        delete state.appearance.nodeSize.range;  // remove default range
+        state.appearance.nodeSize.range = null;  // remove default range
         state.setAppearance(
           "nodeSize", "rangePreset", lbox.selectBoxValue(d3.select(event.currentTarget)));
       });
   selection.select('.sizerange select')
-      .attr("disabled", hasSizeDomain ? "disabled" : null)
+      .attr("disabled", hasSizeDomain ? null : "disabled");
   selection.select('.sizedomain')
-      .call(box.updateDomainValues, sizeDomain)
+      .call(box.updateDomainValues, size.domain)
       .on('change', event => {
         state.setAppearance(
           "nodeSize", "domain", box.domainValues(d3.select(event.currentTarget)));
@@ -561,38 +561,38 @@ function EdgeControlBox(selection) {
 function updateEdgeControl(selection, state) {
   const nfields = state.numericFields.filter(e => e.startsWith("edge.")).map(e => e.substring(5));
   const cfields = state.categoricalFields.filter(e => e.startsWith("edge.")).map(e => e.substring(5));
-  const fields = state.fields.filter(e => e.startsWith("edge.")).map(e => e.substring(5));
   const qfields = nfields.concat(cfields);
-  const lfields = fields.filter(e => !e.includes(["source", "target"]));
+  const fields = state.fields.filter(e => e.startsWith("edge.")).map(e => e.substring(5));
+  const lfields = fields.filter(e => !["source", "target"].includes(e));
 
-  // undef -> set default
   const color = state.appearance.edgeColor;
-  const hasColorField = color.hasOwnProperty("field");
-  const hasColorDomain = hasColorField && (color.hasOwnProperty("domain")
-    || state.defaultDomain.hasOwnProperty(`edge.${color.field}`));
-  const colorDomain = hasColorDomain ? color.domain || state.defaultDomain[`edge.${color.field}`] : null;
-  const colorRange = color.hasOwnProperty("range") ? {name: "", range: color.range}
-    : scale.colorScales.filter(e => e.name == color.rangePreset);
+  const hasColorField = color.field !== null;
+  const hasColorDomain = hasColorField && color.domain !== null;
+  const colorRange = color.range === null ? scale.colorScales.find(e => e.name == color.rangePreset)
+    : {name: "default", range: color.range};
   selection.select('.colorfield')
       .call(lbox.updateSelectBoxOptions, qfields, undefined, undefined, !hasColorField)
       .call(lbox.updateSelectBoxValue, color.field)
       .on('change', event => {
-        state.setAppearance(
-          "edgeColor", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
+        const v = lbox.selectBoxValue(d3.select(event.currentTarget))
+        if (color.domain === null) {  // set infered domain
+          state.appearance.edgeColor.domain = state.defaultDomain[`edge.${v}`];
+        }
+        state.setAppearance("edgeColor", "field", v);
       });
   selection.select('.colorrange')
       .call(lbox.updateColorScaleItems,
         scale.colorScales.filter(e => e.type === (hasColorDomain ? "continuous" : "discrete")))
       .call(lbox.updateColorScaleBox, colorRange)
       .on('change', event => {
-        delete state.appearance.edgeColor.range;  // remove default range
+        state.appearance.edgeColor.range = null;  // remove default range
         state.setAppearance(
           "edgeColor", "rangePreset", lbox.colorScaleBoxValue(d3.select(event.currentTarget)));
       });
   selection.select('.colorrange button')
-      .property("disabled", !hasColorField)
+      .property("disabled", !hasColorField);
   selection.select('.colordomain')
-      .call(box.updateDomainValues, colorDomain)
+      .call(box.updateDomainValues, color.domain)
       .on('change', event => {
         state.setAppearance(
           "edgeColor", "domain", box.domainValues(d3.select(event.currentTarget)));
@@ -602,31 +602,31 @@ function updateEdgeControl(selection, state) {
       .property("disabled", !hasColorDomain);
 
   const width = state.appearance.edgeWidth;
-  const hasWidthField = width.hasOwnProperty("field");
-  const hasWidthDomain = hasWidthField && (width.hasOwnProperty("domain")
-    || state.defaultDomain.hasOwnProperty(`edge.${width.field}`));
-  const widthDomain = hasWidthDomain ? width.domain || state.defaultDomain[`edge.${width.field}`] : null;
-  const widthRange = width.hasOwnProperty("range") ? {name: "", range: width.range}
-    : scale.edgeWidthScales.filter(e => e.name == width.rangePreset);
+  const hasWidthField = width.field !== null;
+  const hasWidthDomain = hasWidthField && width.domain !== null;
+  const widthRange = width.range === null ? width.rangePreset : "";
   selection.select('.widthfield')
       .call(lbox.updateSelectBoxOptions, nfields, undefined, undefined, !hasWidthField)
       .call(lbox.updateSelectBoxValue, width.field)
       .on('change', event => {
-        state.setAppearance(
-          "edgeWidth", "field", lbox.selectBoxValue(d3.select(event.currentTarget)));
+        const v = lbox.selectBoxValue(d3.select(event.currentTarget))
+        if (width.domain === null) {  // set infered domain
+          state.appearance.edgeWidth.domain = state.defaultDomain[`edge.${v}`];
+        }
+        state.setAppearance("edgeWidth", "field", v);
       });
   selection.select('.widthrange')
-      .call(lbox.updateSelectBoxOptions, scale.edgeWidthScales.map(e => e.name))
+      .call(lbox.updateSelectBoxOptions, scale.edgeWidthScales, d => d.name, d => d.name)
       .call(lbox.updateSelectBoxValue, widthRange)
       .on('change', event => {
-        delete state.appearance.edgeWidth.range;  // remove default range
+        state.appearance.edgeWidth.range = null;  // remove default range
         state.setAppearance(
           "edgeWidth", "rangePreset", lbox.selectBoxValue(d3.select(event.currentTarget)));
       });
-  selection.select('.widthrange button')
-      .property("disabled", !hasWidthField)
+  selection.select('.widthrange select')
+      .attr("disabled", hasWidthDomain ? null : "disabled");
   selection.select('.widthdomain')
-      .call(box.updateDomainValues, widthDomain)
+      .call(box.updateDomainValues, width.domain)
       .on('change', event => {
         state.setAppearance(
           "edgeWidth", "domain", box.domainValues(d3.select(event.currentTarget)));
